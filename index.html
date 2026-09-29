@@ -20,6 +20,8 @@
             <div class="run-stats">
               <div class="stat-chip time-chip"><span class="stat-label">存活</span><strong id="timeValue">0.0<span>s</span></strong></div>
               <div class="stat-chip distance-chip"><span class="stat-label">怪物距離</span><strong id="distanceValue">132<span>m</span></strong></div>
+              <!-- DEBUG: temporary monster speed readout; remove after tuning. -->
+              <div class="stat-chip speed-chip" title="DEBUG：怪物當前有效速度"><span class="stat-label">速度</span><strong id="speedValue">—</strong></div>
             </div>
           </header>
 
@@ -87,7 +89,7 @@
                 <span class="qcc-lock" id="qccLock" aria-hidden="true">🔒</span>
               </button>
             </div>
-            <div class="chase-tip" id="chaseTip">Combo 會降低怪物速度 · 配錯會中斷 Combo</div>
+            <div class="chase-tip" id="chaseTip">連續配對會持續拖慢追兵 · 配錯會中斷 Combo</div>
             <div class="match-readout"><span class="match-dot" aria-hidden="true"></span><span id="matchedValue">0 <small>/ 6 對</small></span></div>
           </div>
         </div>
@@ -129,6 +131,25 @@
             <div><span>最高 Combo</span><strong id="finalCombo">0</strong></div>
           </div>
           <button class="restart-button" id="restartButton" type="button">再玩一次 <span aria-hidden="true">↻</span></button>
+        </div>
+      </section>
+
+      <section class="qcc-tutorial" id="qccTutorialOverlay" hidden role="region" aria-label="強制 QCC 使用指引">
+        <div class="qcc-tutorial-shield" data-region="top" aria-hidden="true"></div>
+        <div class="qcc-tutorial-shield" data-region="left" aria-hidden="true"></div>
+        <div class="qcc-tutorial-shield" data-region="right" aria-hidden="true"></div>
+        <div class="qcc-tutorial-shield" data-region="bottom" aria-hidden="true"></div>
+        <svg class="qcc-tutorial-arrow" id="qccTutorialArrow" aria-hidden="true">
+          <defs>
+            <marker id="qccTutorialArrowhead" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto">
+              <path d="M 1 1 L 11 6 L 1 11 L 3.5 6 Z" fill="#ffe27a" stroke="#493052" stroke-width="1.2"></path>
+            </marker>
+          </defs>
+          <path id="qccTutorialArrowPath" class="qcc-tutorial-arrow-path" d=""></path>
+        </svg>
+        <div class="qcc-tutorial-copy" id="qccTutorialCopy">
+          <strong id="qccTutorialTitle">危險！請立刻使用 QCC</strong>
+          <p>點擊 QCC 棄掉此牌組，換成更容易辨色的清晰色牌。怪物速度高於 100 時，超出部分減半；距離拉回至少 132m。</p>
         </div>
       </section>
     </main>

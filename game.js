@@ -1,17 +1,15 @@
 // 調整手感與預覽時間時，優先從這裡修改數值。
 const CONFIG = {
   PLAYER_BASE_SPEED: 100,
-  // Effective monster speed = capped time-growing base minus QCC, Combo, and lifetime match slow.
-  MONSTER_BASE_OFFSET_X: 1,
-  MONSTER_SPEED_GROWTH_Y: 2,
-  MONSTER_SPEED_GROWTH_INTERVAL_SECONDS : 5,
-  MONSTER_SPEED_CAP: 107,
-  COMBO_MONSTER_SLOW_Z: 3,
+  // The final monster effective speed is capped after growth and all slow effects are applied.
+  MONSTER_BASE_OFFSET_X: 2,
+  MONSTER_SPEED_GROWTH_Y: 0.3,
+  MONSTER_SPEED_GROWTH_INTERVAL_SECONDS : 1,
+  MONSTER_SPEED_CAP: 115, // Final effective speed cap, not a base-speed cap.
+  COMBO_MONSTER_SLOW_UNIT: 0.05,
   // Permanently subtract this amount for every correctly matched pair in the current run.
   MATCH_MONSTER_SLOW: 0.3,
   MONSTER_STUN_DURATION: 0.5,
-  // Preserve the existing permanent QCC slow: one QCC removes 3 speed units.
-  QCC_MONSTER_SLOW_PER_USE: 3,
   INITIAL_DISTANCE: 132,
   LOSE_DISTANCE: 0,
   // 追逐位置與距離共用同一個上限；怪物遠端錨點在跑道 25%。
@@ -28,14 +26,13 @@ const CONFIG = {
   // 正式近似色目前使用 subtle；clear 已備妥，尚未用在遊戲或提示中。
   PALETTE_VARIANT: 'subtle',
   DANGER_DISTANCE: 70,
+  QCC_TUTORIAL_DISTANCE: 70,
 
   QCC_INITIAL_COUNT: 1,
   QCC_MAX_COUNT: 2,
   QCC_UNLOCK_DECK: 4,
   QCC_FIRST_REWARD_DECK: 5,
   QCC_GRANT_INTERVAL: 4,
-  // 每次 QCC 永久削減一個牌組成長單位；多次使用可累積。
-  QCC_MONSTER_SLOW_STEPS: 1,
   QCC_TRANSITION_DURATION_MS: 500,
 
   // The one-time warning plays after this many completed decks, before the next preview.
@@ -109,11 +106,13 @@ const COLOR_PALETTES = {
 const PALETTE_THEMES = Object.keys(COLOR_PALETTES);
 
 const state = {
-  phase: 'idle', // Normal: preview → playing → roundClear → preview; deck 3 inserts boardClearStun → dangerTransition.
+  phase: 'idle', // Normal: preview → playing → roundClear → preview; QCC tutorial pauses Playing.
   deckIndex: 0,
   elapsed: 0,
   distance: Math.min(CONFIG.INITIAL_DISTANCE, CONFIG.MAX_DISTANCE),
   combo: 0,
+  // Cumulative Combo milestone slow for this run; only Restart clears it.
+  comboPermanentSlowTotal: 0,
   bestCombo: 0,
   matchedPairs: 0,
   // Lifetime successful pair count; unlike matchedPairs, this survives deck/QCC changes.
@@ -127,12 +126,16 @@ const state = {
   currentSelectedColorIndices: [],
   currentPaletteVariant: null,
   qccCount: CONFIG.QCC_INITIAL_COUNT,
-  qccMonsterSlowSteps: 0,
+  // QCC's cumulative additive speed offset; Restart is the only reset.
+  qccPermanentSlowTotal: 0,
+  hasEverUsedQcc: false,
+  qccTutorialShown: false,
   lastQccRewardDeck: 0,
   lastFramePhase: 'idle',
   previousTime: 0,
   lastTimeShown: -1,
   lastDistanceShown: null,
+  lastSpeedShown: null,
   mismatchTimer: null,
   previewTimer: null,
   roundClearTimer: null,
@@ -164,6 +167,11 @@ const qccButton = $('#qccButton');
 const qccCount = $('#qccCount');
 const qccLock = $('#qccLock');
 const qccFlash = $('#qccFlash');
+const qccTutorialOverlay = $('#qccTutorialOverlay');
+const qccTutorialArrow = $('#qccTutorialArrow');
+const qccTutorialCopy = $('#qccTutorialCopy');
+const qccTutorialArrowPath = $('#qccTutorialArrowPath');
+const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutorial-shield')];
 
 function shuffle(items) {
   const shuffled = [...items];
@@ -318,12 +326,16 @@ function resolveTurn() {
 
 function onSuccessfulMatch() {
   state.combo += 1;
+  // Each newly reached Combo milestone adds a permanent slow award:
+  // Combo 1 = 0 units, 2 = 1, 3 = 2, 4 = 3, then 4 more for every Combo >= 5.
+  const awardedSlowUnits = state.combo >= 5 ? 4 : Math.max(0, state.combo - 1);
+  state.comboPermanentSlowTotal += awardedSlowUnits * CONFIG.COMBO_MONSTER_SLOW_UNIT;
   state.bestCombo = Math.max(state.bestCombo, state.combo);
   updateComboUI(true);
 
   const message = state.combo >= 2
-    ? `COMBO ${state.combo}！怪物減速！`
-    : '配對成功！繼續連鎖可拖慢怪物。';
+    ? `COMBO ${state.combo}！怪物持續減速！`
+    : '配對成功！連續配對可持續拖慢怪物。';
   showFeedback(message, state.combo >= 3 ? 'big' : 'good');
 }
 
@@ -343,11 +355,94 @@ function isQccDeckUnlocked() {
 }
 
 function canUseQcc() {
-  return state.phase === 'playing'
+  return (state.phase === 'playing' || state.phase === 'qccTutorial')
     && isQccDeckUnlocked()
     && state.qccCount > 0
     && state.currentPaletteTheme !== null
     && state.currentSelectedColorIndices.length === CONFIG.CARD_PAIRS;
+}
+
+function positionQccTutorial() {
+  if (state.phase !== 'qccTutorial' || qccTutorialOverlay.hidden) return;
+
+  const overlayRect = qccTutorialOverlay.getBoundingClientRect();
+  const targetRect = qccButton.getBoundingClientRect();
+  const width = overlayRect.width;
+  const height = overlayRect.height;
+  if (!width || !height || !targetRect.width || !targetRect.height) return;
+
+  // Four independent scrims leave a real hit-test hole over the existing QCC button.
+  const holePadding = 12;
+  const hole = {
+    left: Math.max(0, targetRect.left - overlayRect.left - holePadding),
+    top: Math.max(0, targetRect.top - overlayRect.top - holePadding),
+    right: Math.min(width, targetRect.right - overlayRect.left + holePadding),
+    bottom: Math.min(height, targetRect.bottom - overlayRect.top + holePadding),
+  };
+  const regions = {
+    top: { left: 0, top: 0, width, height: hole.top },
+    left: { left: 0, top: hole.top, width: hole.left, height: hole.bottom - hole.top },
+    right: { left: hole.right, top: hole.top, width: width - hole.right, height: hole.bottom - hole.top },
+    bottom: { left: 0, top: hole.bottom, width, height: height - hole.bottom },
+  };
+  qccTutorialShields.forEach((shield) => {
+    const rect = regions[shield.dataset.region];
+    shield.style.left = `${rect.left}px`;
+    shield.style.top = `${rect.top}px`;
+    shield.style.width = `${Math.max(0, rect.width)}px`;
+    shield.style.height = `${Math.max(0, rect.height)}px`;
+  });
+
+  const buttonX = targetRect.left - overlayRect.left + targetRect.width / 2;
+  const buttonTop = targetRect.top - overlayRect.top;
+  const buttonBottom = targetRect.bottom - overlayRect.top;
+  const copyWidth = qccTutorialCopy.getBoundingClientRect().width;
+  const copyHeight = qccTutorialCopy.getBoundingClientRect().height;
+  const copyLeft = Math.max(12, Math.min(width - copyWidth - 12, buttonX - copyWidth / 2));
+  const roomAbove = buttonTop - copyHeight - 50;
+  const roomBelow = height - buttonBottom - copyHeight - 50;
+  const copyAbove = roomAbove >= 12 || roomAbove >= roomBelow;
+  const copyTop = copyAbove
+    ? Math.max(12, buttonTop - copyHeight - 50)
+    : Math.min(height - copyHeight - 12, buttonBottom + 50);
+  qccTutorialCopy.style.left = `${copyLeft}px`;
+  qccTutorialCopy.style.top = `${copyTop}px`;
+
+  const startX = Math.max(copyLeft + 36, Math.min(copyLeft + copyWidth - 36, buttonX));
+  const startY = copyAbove ? copyTop + copyHeight + 3 : copyTop - 3;
+  const endY = copyAbove ? buttonTop - 4 : buttonBottom + 4;
+  const bendY = (startY + endY) / 2;
+  qccTutorialArrowPath.setAttribute('d', `M ${startX} ${startY} C ${startX} ${bendY}, ${buttonX} ${bendY}, ${buttonX} ${endY}`);
+  qccTutorialArrow.setAttribute('viewBox', `0 0 ${width} ${height}`);
+}
+
+function hideQccTutorial() {
+  qccTutorialOverlay.hidden = true;
+  gameShell.classList.remove('is-qcc-tutorial');
+  qccButton.removeAttribute('aria-describedby');
+}
+
+function maybeShowQccTutorial() {
+  const qccReady = isQccDeckUnlocked()
+    && state.qccCount > 0
+    && state.currentPaletteTheme !== null
+    && state.currentSelectedColorIndices.length === CONFIG.CARD_PAIRS;
+  if (state.phase !== 'playing'
+    || state.distance >= CONFIG.QCC_TUTORIAL_DISTANCE
+    || state.hasEverUsedQcc
+    || state.qccTutorialShown
+    || !qccReady) return false;
+
+  state.qccTutorialShown = true;
+  state.phase = 'qccTutorial';
+  qccTutorialOverlay.hidden = false;
+  gameShell.classList.add('is-qcc-tutorial');
+  qccButton.setAttribute('aria-describedby', 'qccTutorialTitle qccTutorialCopy');
+  syncCardState();
+  updateQccUI();
+  positionQccTutorial();
+  qccButton.focus({ preventScroll: true });
+  return true;
 }
 
 function updateQccUI() {
@@ -359,20 +454,34 @@ function updateQccUI() {
   qccButton.setAttribute('aria-label', `QCC 道具，剩餘 ${state.qccCount} 個${lockedByDeck ? '，目前鎖定' : ''}`);
 }
 
-function monsterSpeed() {
+function monsterSpeedBeforeCap() {
   if (state.monsterStunRemaining > 0) return 0;
 
   const elapsedGrowthSteps = Math.floor(state.elapsed / CONFIG.MONSTER_SPEED_GROWTH_INTERVAL_SECONDS);
-  const comboSlowSteps = Math.min(4, Math.max(0, state.combo - 1));
-  const qccSlowdown = state.qccMonsterSlowSteps * CONFIG.QCC_MONSTER_SLOW_PER_USE;
-  const comboSlowdown = comboSlowSteps * CONFIG.COMBO_MONSTER_SLOW_Z;
+  const qccSlowdown = state.qccPermanentSlowTotal;
   const matchSlowdown = state.matchedPairCount * CONFIG.MATCH_MONSTER_SLOW;
-  // Cap only the time-growing base speed. Combo, QCC, and lifetime match slowdown
-  // are applied afterward so effective speed can fall below the cap (or player speed).
-  const monsterBaseSpeed = Math.min(CONFIG.MONSTER_SPEED_CAP, CONFIG.PLAYER_BASE_SPEED
+  const comboPermanentSlow = state.comboPermanentSlowTotal;
+  const monsterBaseSpeed = CONFIG.PLAYER_BASE_SPEED
     + CONFIG.MONSTER_BASE_OFFSET_X
-    + elapsedGrowthSteps * CONFIG.MONSTER_SPEED_GROWTH_Y);
-  return Math.max(0, monsterBaseSpeed - comboSlowdown - matchSlowdown - qccSlowdown);
+    + elapsedGrowthSteps * CONFIG.MONSTER_SPEED_GROWTH_Y;
+  return Math.max(0, monsterBaseSpeed - comboPermanentSlow - matchSlowdown - qccSlowdown);
+}
+
+function monsterSpeed() {
+  if (state.monsterStunRemaining > 0) return 0;
+  return Math.min(CONFIG.MONSTER_SPEED_CAP, monsterSpeedBeforeCap());
+}
+
+function applyQccSpeedReduction() {
+  const currentMonsterSpeed = monsterSpeed();
+  if (currentMonsterSpeed <= 100) return 0;
+
+  const targetMonsterSpeed = 100 + (currentMonsterSpeed - 100) / 2;
+  // Account for any overshoot hidden by the final cap so the visible speed
+  // lands exactly on the target after this persistent offset is applied.
+  const reduction = Math.max(0, monsterSpeedBeforeCap() - targetMonsterSpeed);
+  state.qccPermanentSlowTotal += reduction;
+  return reduction;
 }
 
 function renderChasePosition() {
@@ -556,27 +665,40 @@ function finishPreview(token) {
     state.monsterStunRemaining = CONFIG.MONSTER_STUN_DURATION;
     gameShell.classList.add('is-monster-stunned');
   }
+  if (maybeShowQccTutorial()) return;
   syncCardState();
   updateQccUI();
   $('#sceneMessage').textContent = '連續配對會拖慢怪物，完成牌組還能讓牠暈眩！';
-  $('#memoryHint').textContent = '一次翻開兩張；Combo 2 起會降低怪物速度。';
-  $('#boardFooterText').textContent = '連續配對可降低追兵速度；清盤後怪物暈眩 0.5 秒。';
-  $('#chaseTip').textContent = 'Combo 會降低怪物速度 · 配錯會中斷 Combo';
+  $('#memoryHint').textContent = '一次翻開兩張；連續配對會持續拖慢追兵。';
+  $('#boardFooterText').textContent = '連續配對會持續拖慢追兵；清盤後怪物暈眩 0.5 秒。';
+  $('#chaseTip').textContent = '連續配對會持續拖慢追兵 · 配錯會中斷 Combo';
   const firstCard = cardGrid.querySelector('.memory-card:not(:disabled)');
   if (firstCard) firstCard.focus({ preventScroll: true });
 }
 
 function useQcc() {
-  if (!canUseQcc()) return;
+  const fromTutorial = state.phase === 'qccTutorial';
+  const qccReady = isQccDeckUnlocked()
+    && state.qccCount > 0
+    && state.currentPaletteTheme !== null
+    && state.currentSelectedColorIndices.length === CONFIG.CARD_PAIRS;
+  if (!qccReady || (!fromTutorial && !canUseQcc())) return;
+
+  applyQccSpeedReduction();
+  state.distance = Math.max(state.distance, 132);
 
   state.qccCount -= 1;
-  state.qccMonsterSlowSteps += CONFIG.QCC_MONSTER_SLOW_STEPS;
+  state.hasEverUsedQcc = true;
   state.combo = 0;
   state.matchedPairs = 0;
   state.flipped = [];
   if (state.mismatchTimer !== null) window.clearTimeout(state.mismatchTimer);
   state.mismatchTimer = null;
   state.runToken += 1;
+
+  if (fromTutorial) {
+    hideQccTutorial();
+  }
 
   updateComboUI(false);
   updateMatchUI();
@@ -624,6 +746,13 @@ function updateDistanceUI() {
   state.lastDistanceShown = shownDistance;
 }
 
+function updateSpeedUI() {
+  const shownSpeed = monsterSpeed().toFixed(1);
+  if (shownSpeed === state.lastSpeedShown) return;
+  $('#speedValue').textContent = shownSpeed;
+  state.lastSpeedShown = shownSpeed;
+}
+
 function frame(timestamp) {
   if (state.previousTime === 0) state.previousTime = timestamp;
   const elapsedSinceFrame = Math.max(0, (timestamp - state.previousTime) / 1000);
@@ -639,6 +768,7 @@ function frame(timestamp) {
   if (chaseIsActive) {
     state.elapsed += playingDt;
     updateDistance(playingDt);
+    if (state.phase === 'playing') maybeShowQccTutorial();
     // The third-deck cutscene stun is timer-controlled; regular post-preview stuns
     // continue to use the normal playing-phase countdown.
     if (state.phase === 'playing') updateMonsterStun(playingDt);
@@ -652,6 +782,7 @@ function frame(timestamp) {
   // render from that one state on every animation frame, including frozen phases.
   renderChasePosition();
   updateDistanceUI();
+  updateSpeedUI();
   state.animationFrame = window.requestAnimationFrame(frame);
 }
 
@@ -662,6 +793,7 @@ function endGame() {
   state.monsterStunRemaining = 0;
   state.monsterStunPending = false;
   gameShell.classList.remove('is-running', 'is-monster-stunned', 'is-previewing', 'is-qcc-transitioning');
+  hideQccTutorial();
   gameShell.classList.remove('is-danger-transition');
   dangerTransition.hidden = true;
   dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
@@ -702,6 +834,7 @@ function restartGame() {
     elapsed: 0,
     distance: Math.min(CONFIG.INITIAL_DISTANCE, CONFIG.MAX_DISTANCE),
     combo: 0,
+    comboPermanentSlowTotal: 0,
     bestCombo: 0,
     matchedPairs: 0,
     matchedPairCount: 0,
@@ -713,15 +846,19 @@ function restartGame() {
     currentSelectedColorIndices: [],
     currentPaletteVariant: null,
     qccCount: CONFIG.QCC_INITIAL_COUNT,
-    qccMonsterSlowSteps: 0,
+    qccPermanentSlowTotal: 0,
+    hasEverUsedQcc: false,
+    qccTutorialShown: false,
     lastQccRewardDeck: 0,
     previousTime: 0,
     lastFramePhase: 'idle',
     lastTimeShown: -1,
     lastDistanceShown: null,
+    lastSpeedShown: null,
   });
   gameShell.classList.remove('is-running', 'is-monster-stunned', 'is-caught', 'is-previewing', 'is-qcc-transitioning');
   gameShell.classList.remove('is-danger-transition');
+  hideQccTutorial();
   dangerTransition.hidden = true;
   dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
   qccFlash.classList.remove('is-visible');
@@ -732,7 +869,7 @@ function restartGame() {
   $('#timeValue').innerHTML = '0.0<span>s</span>';
   $('#sceneMessage').textContent = '記住顏色與位置，準備甩開追兵！';
   $('#memoryHint').textContent = '開始後先用 3 秒記住全牌顏色與位置，接著配對。';
-  $('#boardFooterText').textContent = '連續配對可降低追兵速度；清盤後怪物暈眩 0.5 秒。';
+  $('#boardFooterText').textContent = '連續配對會持續拖慢追兵；清盤後怪物暈眩 0.5 秒。';
   $('#chaseTip').textContent = `記住顏色與位置 · ${CONFIG.PREVIEW_DURATION} 秒後開始`;
   feedback.textContent = '';
   feedback.className = 'feedback';
@@ -742,6 +879,7 @@ function restartGame() {
   createDeck();
   renderDeck();
   updateDistanceUI();
+  updateSpeedUI();
   if (state.animationFrame === null) state.animationFrame = window.requestAnimationFrame(frame);
 }
 
@@ -789,6 +927,16 @@ cardGrid.addEventListener('click', (event) => {
 startButton.addEventListener('click', beginGame);
 $('#restartButton').addEventListener('click', restartGame);
 qccButton.addEventListener('click', useQcc);
+document.addEventListener('keydown', (event) => {
+  if (state.phase !== 'qccTutorial') return;
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    qccButton.focus({ preventScroll: true });
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+  }
+});
+window.addEventListener('resize', positionQccTutorial);
 
 createDeck();
 renderDeck();
@@ -798,4 +946,5 @@ updateQccUI();
 $('#chaseTip').textContent = `記住顏色與位置 · ${CONFIG.PREVIEW_DURATION} 秒後開始`;
 renderChasePosition();
 updateDistanceUI();
+updateSpeedUI();
 state.animationFrame = window.requestAnimationFrame(frame);
