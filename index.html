@@ -42,7 +42,6 @@
             </div>
 
             <div class="track" aria-hidden="true">
-              <div class="speed-lines" id="speedLines"><i></i><i></i><i></i></div>
               <div class="mountain mountain-back"></div>
               <div class="mountain mountain-front"></div>
               <div class="far-hill hill-one"></div>
@@ -73,7 +72,6 @@
             </div>
 
             <div class="feedback" id="feedback" aria-live="polite" aria-atomic="true"></div>
-            <div class="boost-flash" id="boostFlash" aria-hidden="true">SPEED UP!</div>
             <div class="qcc-flash" id="qccFlash" aria-live="polite" aria-atomic="true"></div>
           </div>
 
@@ -89,7 +87,7 @@
                 <span class="qcc-lock" id="qccLock" aria-hidden="true">🔒</span>
               </button>
             </div>
-            <div class="chase-tip" id="chaseTip">配對加速 · 配錯不扣分，追兵仍在前進</div>
+            <div class="chase-tip" id="chaseTip">Combo 會降低怪物速度 · 配錯會中斷 Combo</div>
             <div class="match-readout"><span class="match-dot" aria-hidden="true"></span><span id="matchedValue">0 <small>/ 6 對</small></span></div>
           </div>
         </div>
@@ -113,6 +111,12 @@
           </footer>
         </div>
       </section>
+
+      <div class="danger-transition" id="dangerTransition" hidden role="alert" aria-label="DANGER! DANGER!">
+        <div class="danger-tape" id="dangerTape">
+          <strong>DANGER! DANGER!</strong>
+        </div>
+      </div>
 
       <section class="game-over" id="gameOverOverlay" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" hidden>
         <div class="game-over-card">

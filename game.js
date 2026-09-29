@@ -1,24 +1,23 @@
 // 調整手感與預覽時間時，優先從這裡修改數值。
 const CONFIG = {
   PLAYER_BASE_SPEED: 100,
-  MONSTER_BASE_SPEED: 107,
+  // Effective monster speed = capped time-growing base minus QCC, Combo, and lifetime match slow.
+  MONSTER_BASE_OFFSET_X: 1,
+  MONSTER_SPEED_GROWTH_Y: 2,
+  MONSTER_SPEED_GROWTH_INTERVAL_SECONDS : 5,
+  MONSTER_SPEED_CAP: 107,
+  COMBO_MONSTER_SLOW_Z: 3,
+  // Permanently subtract this amount for every correctly matched pair in the current run.
+  MATCH_MONSTER_SLOW: 0.3,
+  MONSTER_STUN_DURATION: 0.5,
+  // Preserve the existing permanent QCC slow: one QCC removes 3 speed units.
+  QCC_MONSTER_SLOW_PER_USE: 3,
   INITIAL_DISTANCE: 132,
   LOSE_DISTANCE: 0,
   // 追逐位置與距離共用同一個上限；怪物遠端錨點在跑道 25%。
   MAX_DISTANCE: 300,
   // 依角色插畫實際留白換算接觸點；位置圖的基準仍是跑道 25% 到 75%。
   VISUAL_COLLISION_OFFSET_RATIO: 0.7,
-
-  MATCH_BOOST_SPEED: 15,
-  MATCH_BOOST_DURATION: 2.0,
-  COMBO_2_SPEED: 18,
-  COMBO_2_DURATION: 2.0,
-  COMBO_3_SPEED: 21,
-  COMBO_3_DURATION: 2.0,
-  COMBO_4_SPEED: 24,
-  COMBO_4_DURATION: 2.0,
-  COMBO_5_SPEED: 27,
-  COMBO_5_DURATION: 2.5,
 
   // 預覽期間會暫停計時與相對距離更新；改這個值即可調整每副牌的記憶時間。
   PREVIEW_DURATION: 3,
@@ -28,8 +27,6 @@ const CONFIG = {
 
   // 正式近似色目前使用 subtle；clear 已備妥，尚未用在遊戲或提示中。
   PALETTE_VARIANT: 'subtle',
-  // 內部每完成一副牌增加一次怪物速度；設為 0 即固定速度。
-  MONSTER_SPEED_INCREASE_PER_DECK: 1.5,
   DANGER_DISTANCE: 70,
 
   QCC_INITIAL_COUNT: 1,
@@ -40,6 +37,12 @@ const CONFIG = {
   // 每次 QCC 永久削減一個牌組成長單位；多次使用可累積。
   QCC_MONSTER_SLOW_STEPS: 1,
   QCC_TRANSITION_DURATION_MS: 500,
+
+  // The one-time warning plays after this many completed decks, before the next preview.
+  DANGER_TRANSITION_TRIGGER_DECK: 3,
+  DANGER_ENTER_DURATION: 0.55,
+  DANGER_HOLD_DURATION: 1.9,
+  DANGER_EXIT_DURATION: 0.55,
 };
 
 // 內部索引 0、1、2 各用一組高辨識色；第 4 副牌起改用近似色。
@@ -106,16 +109,19 @@ const COLOR_PALETTES = {
 const PALETTE_THEMES = Object.keys(COLOR_PALETTES);
 
 const state = {
-  phase: 'idle', // idle → preview → playing → qccTransition/roundClear → preview; gameOver ends the run.
+  phase: 'idle', // Normal: preview → playing → roundClear → preview; deck 3 inserts boardClearStun → dangerTransition.
   deckIndex: 0,
   elapsed: 0,
   distance: Math.min(CONFIG.INITIAL_DISTANCE, CONFIG.MAX_DISTANCE),
   combo: 0,
   bestCombo: 0,
   matchedPairs: 0,
+  // Lifetime successful pair count; unlike matchedPairs, this survives deck/QCC changes.
+  matchedPairCount: 0,
+  hasShownDangerTransition: false,
   flipped: [],
-  boostSpeed: 0,
-  boostRemaining: 0,
+  monsterStunRemaining: 0,
+  monsterStunPending: false,
   deck: [],
   currentPaletteTheme: null,
   currentSelectedColorIndices: [],
@@ -130,6 +136,8 @@ const state = {
   mismatchTimer: null,
   previewTimer: null,
   roundClearTimer: null,
+  boardClearStunTimer: null,
+  dangerTransitionTimer: null,
   qccTransitionTimer: null,
   feedbackTimer: null,
   phaseToken: 0,
@@ -145,6 +153,8 @@ const chaseStage = $('.chase-stage');
 const startPanel = $('#startPanel');
 const startButton = $('#startButton');
 const gameOverOverlay = $('#gameOverOverlay');
+const dangerTransition = $('#dangerTransition');
+const dangerTape = $('#dangerTape');
 const monster = $('#monster');
 const hero = $('#hero');
 const track = $('.track');
@@ -278,6 +288,7 @@ function resolveTurn() {
     second.button.disabled = true;
     state.flipped = [];
     state.matchedPairs += 1;
+    state.matchedPairCount += 1;
     onSuccessfulMatch();
     updateMatchUI();
 
@@ -310,12 +321,9 @@ function onSuccessfulMatch() {
   state.bestCombo = Math.max(state.bestCombo, state.combo);
   updateComboUI(true);
 
-  const tier = Math.min(state.combo, 5);
-  const speedKey = tier === 1 ? 'MATCH_BOOST_SPEED' : `COMBO_${tier}_SPEED`;
-  const durationKey = tier === 1 ? 'MATCH_BOOST_DURATION' : `COMBO_${tier}_DURATION`;
-  applyBoost(CONFIG[speedKey], CONFIG[durationKey]);
-
-  const message = state.combo >= 3 ? `COMBO ${state.combo}!` : '配對成功！加速！';
+  const message = state.combo >= 2
+    ? `COMBO ${state.combo}！怪物減速！`
+    : '配對成功！繼續連鎖可拖慢怪物。';
   showFeedback(message, state.combo >= 3 ? 'big' : 'good');
 }
 
@@ -351,21 +359,20 @@ function updateQccUI() {
   qccButton.setAttribute('aria-label', `QCC 道具，剩餘 ${state.qccCount} 個${lockedByDeck ? '，目前鎖定' : ''}`);
 }
 
-function applyBoost(speedBonus, duration) {
-  state.boostSpeed = speedBonus;
-  state.boostRemaining = duration;
-  if (state.phase === 'playing') gameShell.classList.add('is-boosting');
-}
-
-function currentPlayerSpeed() {
-  return CONFIG.PLAYER_BASE_SPEED + (state.boostRemaining > 0 ? state.boostSpeed : 0);
-}
-
 function monsterSpeed() {
-  const speedSteps = Math.max(0, state.deckIndex - 1);
-  const deckGrowth = speedSteps * CONFIG.MONSTER_SPEED_INCREASE_PER_DECK;
-  const qccSlowdown = state.qccMonsterSlowSteps * CONFIG.MONSTER_SPEED_INCREASE_PER_DECK;
-  return Math.max(0, CONFIG.MONSTER_BASE_SPEED + deckGrowth - qccSlowdown);
+  if (state.monsterStunRemaining > 0) return 0;
+
+  const elapsedGrowthSteps = Math.floor(state.elapsed / CONFIG.MONSTER_SPEED_GROWTH_INTERVAL_SECONDS);
+  const comboSlowSteps = Math.min(4, Math.max(0, state.combo - 1));
+  const qccSlowdown = state.qccMonsterSlowSteps * CONFIG.QCC_MONSTER_SLOW_PER_USE;
+  const comboSlowdown = comboSlowSteps * CONFIG.COMBO_MONSTER_SLOW_Z;
+  const matchSlowdown = state.matchedPairCount * CONFIG.MATCH_MONSTER_SLOW;
+  // Cap only the time-growing base speed. Combo, QCC, and lifetime match slowdown
+  // are applied afterward so effective speed can fall below the cap (or player speed).
+  const monsterBaseSpeed = Math.min(CONFIG.MONSTER_SPEED_CAP, CONFIG.PLAYER_BASE_SPEED
+    + CONFIG.MONSTER_BASE_OFFSET_X
+    + elapsedGrowthSteps * CONFIG.MONSTER_SPEED_GROWTH_Y);
+  return Math.max(0, monsterBaseSpeed - comboSlowdown - matchSlowdown - qccSlowdown);
 }
 
 function renderChasePosition() {
@@ -386,35 +393,49 @@ function renderChasePosition() {
   chaseStage.classList.toggle('danger-near', state.distance < CONFIG.DANGER_DISTANCE);
 }
 
-function updateBoost(dt) {
-  if (state.boostRemaining > 0) {
-    state.boostRemaining = Math.max(0, state.boostRemaining - dt);
-    if (state.boostRemaining === 0) {
-      state.boostSpeed = 0;
-      gameShell.classList.remove('is-boosting');
-    }
-  }
+function updateMonsterStun(dt) {
+  if (state.monsterStunRemaining <= 0) return;
+  state.monsterStunRemaining = Math.max(0, state.monsterStunRemaining - dt);
+  if (state.monsterStunRemaining === 0) gameShell.classList.remove('is-monster-stunned');
 }
 
 function updateDistance(dt) {
-  if (state.phase !== 'playing') return;
-  const playerCurrentSpeed = currentPlayerSpeed();
+  if (state.phase !== 'playing' && state.phase !== 'boardClearStun') return;
+  const playerCurrentSpeed = CONFIG.PLAYER_BASE_SPEED;
   const monsterCurrentSpeed = monsterSpeed();
   state.distance += (playerCurrentSpeed - monsterCurrentSpeed) * dt;
   state.distance = Math.max(CONFIG.LOSE_DISTANCE, Math.min(CONFIG.MAX_DISTANCE, state.distance));
-  const runCycle = Math.max(0.28, 0.82 * CONFIG.PLAYER_BASE_SPEED / currentPlayerSpeed());
+  const runCycle = 0.82;
   gameShell.style.setProperty('--run-cycle', `${runCycle.toFixed(2)}s`);
   if (state.distance <= CONFIG.LOSE_DISTANCE) endGame();
 }
 
 function completeDeck() {
   if (state.phase !== 'playing') return;
-  state.phase = 'roundClear';
-  gameShell.classList.remove('is-boosting', 'is-previewing');
+  const shouldPlayDangerTransition = state.deckIndex + 1 === CONFIG.DANGER_TRANSITION_TRIGGER_DECK
+    && !state.hasShownDangerTransition;
+  state.phase = shouldPlayDangerTransition ? 'boardClearStun' : 'roundClear';
+  state.monsterStunPending = !shouldPlayDangerTransition;
+  if (shouldPlayDangerTransition) {
+    state.hasShownDangerTransition = true;
+    state.monsterStunRemaining = CONFIG.MONSTER_STUN_DURATION;
+    gameShell.classList.add('is-monster-stunned');
+  }
+  gameShell.classList.remove('is-previewing');
   syncCardState();
   updateQccUI();
   updateMatchUI();
   showFeedback('配對完成！', 'big');
+
+  if (shouldPlayDangerTransition) {
+    const token = ++state.phaseToken;
+    if (state.boardClearStunTimer !== null) window.clearTimeout(state.boardClearStunTimer);
+    state.boardClearStunTimer = window.setTimeout(
+      () => finishBoardClearStunBeforeDanger(token),
+      CONFIG.MONSTER_STUN_DURATION * 1000,
+    );
+    return;
+  }
 
   if (state.roundClearTimer !== null) window.clearTimeout(state.roundClearTimer);
   const token = ++state.phaseToken;
@@ -424,12 +445,77 @@ function completeDeck() {
 function finishRoundClear(token) {
   if (state.phase !== 'roundClear' || token !== state.phaseToken) return;
   state.roundClearTimer = null;
+  advanceToNextDeck();
+}
+
+function advanceToNextDeck() {
   state.deckIndex += 1;
   grantQccForEnteredDeck(state.deckIndex + 1);
   state.matchedPairs = 0;
   state.flipped = [];
   createDeck();
   startPreview(true);
+}
+
+function finishBoardClearStunBeforeDanger(token) {
+  if (state.phase !== 'boardClearStun' || token !== state.phaseToken) return;
+  state.boardClearStunTimer = null;
+  state.monsterStunRemaining = 0;
+  gameShell.classList.remove('is-monster-stunned');
+  beginDangerTransition();
+}
+
+function beginDangerTransition() {
+  state.phase = 'dangerTransition';
+  clearFeedback();
+  syncCardState();
+  updateQccUI();
+  dangerTransition.hidden = false;
+  dangerTape.style.setProperty('--danger-enter-duration', `${CONFIG.DANGER_ENTER_DURATION}s`);
+  dangerTape.style.setProperty('--danger-exit-duration', `${CONFIG.DANGER_EXIT_DURATION}s`);
+  dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
+  gameShell.classList.add('is-danger-transition');
+  // Restart the CSS entrance cleanly in case the player replayed after Restart.
+  void dangerTape.offsetWidth;
+  dangerTransition.classList.add('is-entering');
+
+  const token = ++state.phaseToken;
+  if (state.dangerTransitionTimer !== null) window.clearTimeout(state.dangerTransitionTimer);
+  state.dangerTransitionTimer = window.setTimeout(
+    () => holdDangerTransition(token),
+    CONFIG.DANGER_ENTER_DURATION * 1000,
+  );
+}
+
+function holdDangerTransition(token) {
+  if (state.phase !== 'dangerTransition' || token !== state.phaseToken) return;
+  state.dangerTransitionTimer = null;
+  dangerTransition.classList.remove('is-entering');
+  dangerTransition.classList.add('is-holding');
+  state.dangerTransitionTimer = window.setTimeout(
+    () => exitDangerTransition(token),
+    CONFIG.DANGER_HOLD_DURATION * 1000,
+  );
+}
+
+function exitDangerTransition(token) {
+  if (state.phase !== 'dangerTransition' || token !== state.phaseToken) return;
+  state.dangerTransitionTimer = null;
+  dangerTransition.classList.remove('is-holding');
+  dangerTransition.classList.add('is-exiting');
+  state.dangerTransitionTimer = window.setTimeout(
+    () => finishDangerTransition(token),
+    CONFIG.DANGER_EXIT_DURATION * 1000,
+  );
+}
+
+function finishDangerTransition(token) {
+  if (state.phase !== 'dangerTransition' || token !== state.phaseToken) return;
+  state.dangerTransitionTimer = null;
+  dangerTransition.hidden = true;
+  dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
+  gameShell.classList.remove('is-danger-transition');
+  advanceToNextDeck();
 }
 
 function grantQccForEnteredDeck(internalDeckNumber) {
@@ -446,7 +532,6 @@ function startPreview(renderNewDeck = false) {
   state.phase = 'preview';
   clearFeedback();
   gameShell.classList.add('is-previewing');
-  gameShell.classList.remove('is-boosting');
   if (renderNewDeck) renderDeck();
   else syncCardState();
 
@@ -466,13 +551,17 @@ function finishPreview(token) {
   state.previewTimer = null;
   state.phase = 'playing';
   gameShell.classList.remove('is-previewing');
+  if (state.monsterStunPending) {
+    state.monsterStunPending = false;
+    state.monsterStunRemaining = CONFIG.MONSTER_STUN_DURATION;
+    gameShell.classList.add('is-monster-stunned');
+  }
   syncCardState();
   updateQccUI();
-  if (state.boostRemaining > 0) gameShell.classList.add('is-boosting');
-  $('#sceneMessage').textContent = '翻開兩張相同的顏色，配對成功就能加速！';
-  $('#memoryHint').textContent = '一次翻開兩張；成功配對，主角就能衝刺。';
-  $('#boardFooterText').textContent = '記住牌面與位置，連續配對能讓主角加速更久。';
-  $('#chaseTip').textContent = '成功配對加速 · 配錯會中斷 Combo';
+  $('#sceneMessage').textContent = '連續配對會拖慢怪物，完成牌組還能讓牠暈眩！';
+  $('#memoryHint').textContent = '一次翻開兩張；Combo 2 起會降低怪物速度。';
+  $('#boardFooterText').textContent = '連續配對可降低追兵速度；清盤後怪物暈眩 0.5 秒。';
+  $('#chaseTip').textContent = 'Combo 會降低怪物速度 · 配錯會中斷 Combo';
   const firstCard = cardGrid.querySelector('.memory-card:not(:disabled)');
   if (firstCard) firstCard.focus({ preventScroll: true });
 }
@@ -503,7 +592,7 @@ function useQcc() {
 
   state.phase = 'qccTransition';
   gameShell.classList.add('is-qcc-transitioning');
-  gameShell.classList.remove('is-boosting', 'is-previewing');
+  gameShell.classList.remove('is-previewing');
   syncCardState();
   updateQccUI();
 
@@ -545,19 +634,19 @@ function frame(timestamp) {
   state.lastFramePhase = state.phase;
   const playingDt = phaseChangedSinceFrame ? 0 : dt;
 
-  // Boost uses real elapsed time so a throttled RAF cannot carry it beyond a 3s preview.
-  // Physics remains capped; distance only changes in updateDistance while playing.
-  if (state.phase === 'playing') {
+  // Monster growth uses elapsed playing time; previews and transitions do not grow or move it.
+  const chaseIsActive = state.phase === 'playing' || state.phase === 'boardClearStun';
+  if (chaseIsActive) {
     state.elapsed += playingDt;
-    updateBoost(elapsedSinceFrame);
     updateDistance(playingDt);
+    // The third-deck cutscene stun is timer-controlled; regular post-preview stuns
+    // continue to use the normal playing-phase countdown.
+    if (state.phase === 'playing') updateMonsterStun(playingDt);
     const displayedTenths = Math.floor(state.elapsed * 10);
     if (displayedTenths !== state.lastTimeShown) {
       $('#timeValue').innerHTML = `${(displayedTenths / 10).toFixed(1)}<span>s</span>`;
       state.lastTimeShown = displayedTenths;
     }
-  } else if (state.phase === 'preview' || state.phase === 'roundClear' || state.phase === 'qccTransition') {
-    updateBoost(elapsedSinceFrame);
   }
   // Distance is only integrated above while playing; positions and the readout
   // render from that one state on every animation frame, including frozen phases.
@@ -570,9 +659,12 @@ function endGame() {
   if (state.phase === 'gameOver') return;
   state.phase = 'gameOver';
   clearTimers();
-  state.boostRemaining = 0;
-  state.boostSpeed = 0;
-  gameShell.classList.remove('is-running', 'is-boosting', 'is-previewing', 'is-qcc-transitioning');
+  state.monsterStunRemaining = 0;
+  state.monsterStunPending = false;
+  gameShell.classList.remove('is-running', 'is-monster-stunned', 'is-previewing', 'is-qcc-transitioning');
+  gameShell.classList.remove('is-danger-transition');
+  dangerTransition.hidden = true;
+  dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
   gameShell.classList.add('is-caught');
   disableCards(true);
   updateQccUI();
@@ -589,11 +681,15 @@ function clearTimers() {
   if (state.mismatchTimer !== null) window.clearTimeout(state.mismatchTimer);
   if (state.previewTimer !== null) window.clearTimeout(state.previewTimer);
   if (state.roundClearTimer !== null) window.clearTimeout(state.roundClearTimer);
+  if (state.boardClearStunTimer !== null) window.clearTimeout(state.boardClearStunTimer);
+  if (state.dangerTransitionTimer !== null) window.clearTimeout(state.dangerTransitionTimer);
   if (state.qccTransitionTimer !== null) window.clearTimeout(state.qccTransitionTimer);
   if (state.feedbackTimer !== null) window.clearTimeout(state.feedbackTimer);
   state.mismatchTimer = null;
   state.previewTimer = null;
   state.roundClearTimer = null;
+  state.boardClearStunTimer = null;
+  state.dangerTransitionTimer = null;
   state.qccTransitionTimer = null;
   state.feedbackTimer = null;
 }
@@ -608,9 +704,11 @@ function restartGame() {
     combo: 0,
     bestCombo: 0,
     matchedPairs: 0,
+    matchedPairCount: 0,
+    hasShownDangerTransition: false,
     flipped: [],
-    boostSpeed: 0,
-    boostRemaining: 0,
+    monsterStunRemaining: 0,
+    monsterStunPending: false,
     currentPaletteTheme: null,
     currentSelectedColorIndices: [],
     currentPaletteVariant: null,
@@ -622,7 +720,10 @@ function restartGame() {
     lastTimeShown: -1,
     lastDistanceShown: null,
   });
-  gameShell.classList.remove('is-running', 'is-boosting', 'is-caught', 'is-previewing', 'is-qcc-transitioning');
+  gameShell.classList.remove('is-running', 'is-monster-stunned', 'is-caught', 'is-previewing', 'is-qcc-transitioning');
+  gameShell.classList.remove('is-danger-transition');
+  dangerTransition.hidden = true;
+  dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
   qccFlash.classList.remove('is-visible');
   qccFlash.textContent = '';
   gameShell.style.removeProperty('--run-cycle');
@@ -631,7 +732,7 @@ function restartGame() {
   $('#timeValue').innerHTML = '0.0<span>s</span>';
   $('#sceneMessage').textContent = '記住顏色與位置，準備甩開追兵！';
   $('#memoryHint').textContent = '開始後先用 3 秒記住全牌顏色與位置，接著配對。';
-  $('#boardFooterText').textContent = '記住牌面與位置，找出六組相同的顏色。';
+  $('#boardFooterText').textContent = '連續配對可降低追兵速度；清盤後怪物暈眩 0.5 秒。';
   $('#chaseTip').textContent = `記住顏色與位置 · ${CONFIG.PREVIEW_DURATION} 秒後開始`;
   feedback.textContent = '';
   feedback.className = 'feedback';

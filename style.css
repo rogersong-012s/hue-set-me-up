@@ -167,18 +167,14 @@ button { font: inherit; }
 .game-shell.is-running .monster { animation-delay: -0.25s; }
 .game-shell.is-running .foot-one { animation: foot-kick 280ms ease-in-out infinite alternate; }
 .game-shell.is-running .foot-two { animation: foot-kick 280ms ease-in-out -140ms infinite alternate-reverse; }
-.game-shell.is-boosting .hero { animation-duration: 0.28s; }
 .game-shell.is-caught .monster { z-index: 6; transition: none; }
+.game-shell.is-monster-stunned .monster,
+.game-shell.is-monster-stunned .monster .monster-foot { animation-play-state: paused; }
+.game-shell.is-monster-stunned .monster { filter: saturate(0.65) brightness(1.08); }
+.game-shell.is-monster-stunned .monster::after { content: "✦"; position: absolute; z-index: 8; top: -14%; right: -3%; color: #fff2a4; font-size: clamp(1.2rem, 2vw, 1.8rem); text-shadow: 0 0 0.35rem #fff7bf, 0 0 0.8rem #ffd35f; animation: monster-dizzy 160ms ease-in-out infinite alternate; }
 @keyframes runner-hop { from { translate: 0 0; rotate: -1deg; } to { translate: 0 -0.42rem; rotate: 1.5deg; } }
 @keyframes foot-kick { to { rotate: 18deg; translate: 0 0.1rem; } }
-
-.speed-lines { position: absolute; z-index: 4; left: 40%; bottom: 35%; display: grid; gap: 0.43rem; width: 14%; opacity: 0; transform: translateX(-1rem); transition: opacity 180ms ease; }
-.speed-lines i { display: block; width: 72%; height: 0.15rem; border-radius: 1rem; background: #fff2b9; box-shadow: 0 0 0.45rem #ffd783; transform: skewX(-28deg); }
-.speed-lines i:nth-child(2) { width: 100%; margin-left: 20%; }
-.speed-lines i:nth-child(3) { width: 55%; margin-left: 8%; }
-.game-shell.is-boosting .speed-lines { opacity: 0.9; animation: streak 300ms ease-in-out infinite alternate; }
-@keyframes streak { to { transform: translateX(0.22rem); } }
-.game-shell.is-boosting .scene { box-shadow: inset 0 0 0 2px #ffe07fba, 0 0 1rem #ffbf6640; }
+@keyframes monster-dizzy { to { transform: rotate(18deg) translateY(-0.18rem); } }
 
 .start-panel { position: absolute; z-index: 8; top: 10%; right: clamp(0.7rem, 1.8vw, 1.5rem); gap: 0.52rem; padding: 0.42rem 0.52rem 0.42rem 0.66rem; border: 1px solid #fff7dc8c; border-radius: 1rem; color: #322b4d; background: linear-gradient(135deg, #fff9e9, #ffdc9a); box-shadow: 0 0.28rem 0 #a45e62, 0 0.7rem 1.2rem #241a3e38; }
 .start-panel[hidden] { display: none; }
@@ -204,10 +200,6 @@ button { font: inherit; }
   76% { opacity: 1; transform: scale(1.03); }
   100% { opacity: 0; transform: scale(1.3); filter: blur(2px); }
 }
-.boost-flash { position: absolute; z-index: 5; left: 50%; bottom: 12%; color: #fff6c8; font-size: clamp(0.78rem, 0.95vw, 0.96rem); font-weight: 1000; letter-spacing: 0.12em; text-shadow: 0 2px 5px #41315e; opacity: 0; transform: translate(-50%, 0.25rem); pointer-events: none; }
-.game-shell.is-boosting .boost-flash { animation: boost-pop 700ms ease-out both; }
-@keyframes boost-pop { 0% { opacity: 0; transform: translate(-50%, 0.25rem) scale(0.9); } 20% { opacity: 1; transform: translate(-50%, -0.15rem) scale(1.04); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -0.55rem); } }
-
 .chase-footer { position: relative; z-index: 8; justify-content: space-between; min-height: 2.65rem; gap: clamp(0.35rem, 0.9vw, 0.75rem); }
 .chase-tools { flex: 0 0 auto; gap: clamp(0.35rem, 0.7vw, 0.58rem); }
 .combo-readout { gap: 0.5rem; min-width: 7.7rem; }
@@ -293,8 +285,26 @@ button { font: inherit; }
 .final-stats strong { display: block; color: #4f3c6c; font-size: clamp(0.9rem, 2vw, 1.1rem); font-variant-numeric: tabular-nums; }
 .restart-button { width: 100%; padding: 0.8rem; font-size: 1rem; }
 
+/* One-time danger cutscene: the world stays visible beneath a heavy warning belt. */
+.game-shell.is-danger-transition .cloud,
+.game-shell.is-danger-transition .lane-dashes,
+.game-shell.is-danger-transition .character,
+.game-shell.is-danger-transition .character .monster-foot { animation-play-state: paused; }
+.danger-transition { position: absolute; z-index: 24; inset: 0; display: grid; place-items: center; overflow: hidden; background: #17152b52; backdrop-filter: blur(1px); pointer-events: auto; }
+.danger-transition[hidden] { display: none; }
+.danger-tape { position: absolute; top: 50%; left: 0; display: grid; place-items: center; width: 100%; min-height: clamp(5.25rem, 13vh, 8rem); padding: 0.55rem 1rem; border-block: clamp(0.34rem, 0.8vw, 0.62rem) solid #171323; background: repeating-linear-gradient(135deg, #ffcf42 0 1.15rem, #211a2a 1.15rem 2.3rem); box-shadow: 0 0.6rem 1.2rem #120e27a8, 0 0 2rem #ffcf4280; transform: translate3d(-110%, -50%, 0); will-change: transform; }
+.danger-tape strong { display: block; padding: 0.32em 1.25em; border: 3px solid #fff5c8; border-radius: 0.65rem; color: #fff8df; background: linear-gradient(180deg, #ea3e45, #a91e37); box-shadow: 0 0.24rem 0 #631a36, inset 0 1px #ffffff75; font-size: clamp(1.55rem, 5.2vw, 3.5rem); font-weight: 1000; letter-spacing: 0.045em; line-height: 1.08; text-align: center; text-shadow: 0 3px 0 #761c38, 0 0 0.9rem #ffdd746e; white-space: nowrap; }
+.danger-transition.is-entering .danger-tape { animation: danger-tape-enter var(--danger-enter-duration, 0.55s) cubic-bezier(.18, 1.16, .34, 1) both; }
+.danger-transition.is-holding .danger-tape { transform: translate3d(0, -50%, 0); }
+.danger-transition.is-exiting .danger-tape { animation: danger-tape-exit var(--danger-exit-duration, 0.55s) cubic-bezier(.68, 0, .82, .32) both; }
+@keyframes danger-tape-enter { to { transform: translate3d(0, -50%, 0); } }
+@keyframes danger-tape-exit { to { transform: translate3d(112%, -50%, 0); } }
+.game-over { z-index: 30; }
+
 @media (max-width: 700px) {
   .game-shell { grid-template-rows: minmax(0, 0.4fr) minmax(0, 0.6fr); }
+  .danger-tape { min-height: 5rem; padding-inline: 0.5rem; }
+  .danger-tape strong { padding: 0.38em 0.6em; font-size: clamp(1.32rem, 5vw, 2rem); }
   .chase-panel { padding-right: clamp(0.7rem, 3vw, 1.15rem); padding-left: clamp(0.7rem, 3vw, 1.15rem); }
   .brand small { display: none; }
   .run-stats { gap: 0.32rem; }
