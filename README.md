@@ -9,9 +9,15 @@
 
 直接雙擊 `index.html`，或將它拖進瀏覽器即可遊玩；不需要啟動 localhost，也不需要安裝 npm 套件。按「開始逃跑」後先有 3 秒全牌預覽，蓋牌後才開始生存計時與追逐。
 
+## 音訊
+
+BGM 會在按下開始後循環播放；進入 Danger 過場時暫停，過場結束後重新播放。Danger 警報音效只在過場中播放一次。BGM 進入危險距離時會改變播放倍率，不會因此重播或重設播放位置。
+
+音檔使用 `musics/bgm/` 與 `musics/sfx/` 下的相對路徑。本機與 GitHub Pages 部署都要保留 `musics/` 資料夾結構。音量可在 `game.js` 最上方的 `CONFIG` 調整；目前 `BGM_VOLUME` 為 `1.0`，`DANGER_ALERT_SFX_VOLUME` 為 `0.4`。
+
 ## 發布到 GitHub Pages
 
-1. 將 `index.html`、`style.css`、`game.js` 和 `README.md` 推送到 GitHub Repository。
+1. 將 `index.html`、`style.css`、`game.js`、`README.md` 和整個 `musics/` 資料夾（保留子目錄結構）推送到 GitHub Repository。
 2. 開啟 Repository 的 **Settings → Pages**。
 3. 在 **Build and deployment** 選擇 **Deploy from a branch**。
 4. 選擇 `main` 分支與 `/ (root)`，再按 **Save**。
