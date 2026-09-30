@@ -326,18 +326,21 @@ button { font: inherit; }
 @keyframes qcc-target-pulse { to { transform: scale(1.09); filter: brightness(1.45); } }
 
 @media (max-width: 700px) {
-  .game-shell { grid-template-rows: minmax(0, 0.4fr) minmax(0, 0.6fr); }
+  .game-shell { grid-template-rows: minmax(0, 0.44fr) minmax(0, 0.56fr); }
   .danger-tape { min-height: 5rem; padding-inline: 0.5rem; }
   .danger-tape::before, .danger-tape::after { height: 0.32rem; }
   .danger-tape::before { top: -0.4rem; }
   .danger-tape::after { bottom: -0.4rem; }
   .danger-tape strong { padding: 0.38em 0.6em; font-size: clamp(1.32rem, 5vw, 2rem); }
   .chase-panel { padding-right: clamp(0.7rem, 3vw, 1.15rem); padding-left: clamp(0.7rem, 3vw, 1.15rem); }
+  .topbar { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; gap: 0.36rem; }
+  .brand { min-width: 0; white-space: nowrap; }
   .brand small { display: none; }
-  .run-stats { gap: 0.32rem; }
-  .stat-chip { gap: 0.32rem; min-width: 0; padding: 0.36rem 0.5rem; }
-  .stat-label { font-size: 0.75rem; letter-spacing: 0; }
-  .stat-chip strong { font-size: 0.9rem; }
+  .run-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; gap: 0.32rem; }
+  .stat-chip { justify-content: space-between; gap: 0.24rem; min-width: 0; padding: 0.32rem 0.4rem; }
+  .stat-label { font-size: clamp(0.66rem, 2.8vw, 0.75rem); letter-spacing: 0; white-space: nowrap; }
+  .stat-chip strong { min-width: 0; font-size: clamp(0.8rem, 3.4vw, 0.9rem); white-space: nowrap; }
+  .time-chip strong { min-width: 0; }
   .distance-chip .stat-label { white-space: nowrap; }
   .memory-panel { padding-right: clamp(0.45rem, 2vw, 0.9rem); padding-left: clamp(0.45rem, 2vw, 0.9rem); }
   .chase-stage { gap: clamp(0.25rem, 0.7vh, 0.5rem); }
@@ -357,7 +360,7 @@ button { font: inherit; }
 }
 
 @media (max-width: 390px) {
-  .game-shell { grid-template-rows: minmax(0, 0.39fr) minmax(0, 0.61fr); }
+  .game-shell { grid-template-rows: minmax(0, 0.43fr) minmax(0, 0.57fr); }
   .chase-panel { gap: 0.2rem; padding-top: 0.45rem; padding-bottom: 0.34rem; }
   .brand { font-size: 1rem; }
   .brand-mark { width: 1.5rem; }

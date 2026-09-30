@@ -190,6 +190,10 @@ const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutoria
 const SHARE_IMAGE_WIDTH = 1080;
 const SHARE_IMAGE_HEIGHT = 1350;
 const SHARE_IMAGE_FILENAME = 'hue-set-me-up-result.png';
+const SHARE_CONFIG = {
+  // Replace this placeholder once the public game URL is finalized.
+  url: 'https://#',
+};
 let shareInProgress = false;
 let gameOverResultSnapshot = null;
 
@@ -855,7 +859,7 @@ function endGame() {
   $('#finalCombo').textContent = gameOverResultSnapshot.bestCombo;
   shareStatus.textContent = '';
   shareButton.disabled = shareInProgress;
-  shareButton.textContent = shareInProgress ? '分享中…' : '分享';
+  shareButton.textContent = shareInProgress ? '分享中…' : getShareButtonLabel();
   gameOverOverlay.hidden = false;
   $('#restartButton').focus({ preventScroll: true });
 }
@@ -1064,6 +1068,33 @@ function setShareStatus(message, runToken) {
   }
 }
 
+function isMobileShareClient() {
+  const userAgentMobile = navigator.userAgentData?.mobile === true
+    || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const hasCoarsePointer = typeof window.matchMedia === 'function'
+    && (window.matchMedia('(pointer: coarse)').matches
+      || window.matchMedia('(any-pointer: coarse)').matches);
+  const hasCoarseTouchInput = Number(navigator.maxTouchPoints) > 0 && hasCoarsePointer;
+  return userAgentMobile || hasCoarseTouchInput;
+}
+
+function getShareButtonLabel() {
+  return isMobileShareClient() ? '分享' : '下載圖片';
+}
+
+function canShareFiles(file) {
+  if (!file || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+function buildShareText(result) {
+  return `我在《我被色記了》撐了 ${result.survivalTime}！\n最高 Combo：${result.bestCombo}\n\n你能撐多久？\n\n${SHARE_CONFIG.url}`;
+}
+
 async function shareResultImage() {
   if (state.phase !== 'gameOver' || shareInProgress || !gameOverResultSnapshot) return;
 
@@ -1079,21 +1110,15 @@ async function shareResultImage() {
     const resultFile = typeof File === 'function'
       ? new File([resultBlob], SHARE_IMAGE_FILENAME, { type: 'image/png' })
       : null;
-    let canShareFile = false;
-    if (resultFile && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
-      try {
-        canShareFile = navigator.canShare({ files: [resultFile] });
-      } catch {
-        canShareFile = false;
-      }
-    }
+    // Desktop always downloads. Native file sharing is limited to mobile/touch clients.
+    const useMobileFileShare = isMobileShareClient() && canShareFiles(resultFile);
 
-    if (canShareFile) {
+    if (useMobileFileShare) {
       try {
         await navigator.share({
           files: [resultFile],
           title: '我被色記了｜Hue set me up!',
-          text: '我被追上了，你能撐多久？',
+          text: buildShareText(gameOverResultSnapshot),
         });
         setShareStatus('分享選單已開啟', runToken);
       } catch (error) {
@@ -1115,7 +1140,7 @@ async function shareResultImage() {
     if (state.runToken === runToken) {
       shareInProgress = false;
       shareButton.disabled = state.phase !== 'gameOver';
-      shareButton.textContent = '分享';
+      shareButton.textContent = getShareButtonLabel();
     }
   }
 }
@@ -1185,7 +1210,7 @@ function restartGame() {
   gameOverResultSnapshot = null;
   shareInProgress = false;
   shareButton.disabled = false;
-  shareButton.textContent = '分享';
+  shareButton.textContent = getShareButtonLabel();
   shareStatus.textContent = '';
   gameOverOverlay.hidden = true;
   startPanel.hidden = false;
