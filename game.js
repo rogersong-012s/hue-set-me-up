@@ -1,5 +1,11 @@
 // 調整手感與預覽時間時，優先從這裡修改數值。
 const CONFIG = {
+  BGM_VOLUME: 0.5, // Main background music volume (0–1).
+  DANGER_ALERT_SFX_DELAY: -0.25, // Seconds after the danger entrance completes.
+  DANGER_ALERT_SFX_VOLUME: 0.8,
+  BGM_NORMAL_PLAYBACK_RATE: 1.0,
+  BGM_POST_DANGER_PLAYBACK_RATE: 1.08,
+  BGM_DANGER_DISTANCE_PLAYBACK_RATE: 1.3,
   PLAYER_BASE_SPEED: 100,
   // The final monster effective speed is capped after growth and all slow effects are applied.
   MONSTER_BASE_OFFSET_X: 2,
@@ -46,6 +52,90 @@ const CONFIG = {
   DANGER_HOLD_DURATION: 1.9,
   DANGER_EXIT_DURATION: 0.55,
 };
+
+// One audio instance is reused for the whole run. A relative URL works from
+// both file:// and a GitHub Pages project subpath, and preload:none keeps idle silent.
+const bgm = new Audio('musics/bgm/hue_set_me_up_bgm_loop.ogg');
+bgm.loop = true;
+bgm.preload = 'none';
+bgm.volume = CONFIG.BGM_VOLUME;
+const dangerAlert = new Audio('musics/sfx/danger_alert.ogg');
+dangerAlert.loop = false;
+dangerAlert.preload = 'auto';
+dangerAlert.volume = CONFIG.DANGER_ALERT_SFX_VOLUME;
+
+function resetAudio(audio) {
+  audio.pause();
+  try {
+    audio.currentTime = 0;
+  } catch {
+    // Some browsers defer seeking until the media metadata is available.
+  }
+}
+
+function requestAudioPlayback(audio) {
+  try {
+    const playRequest = audio.play();
+    if (playRequest && typeof playRequest.catch === 'function') {
+      // Gracefully absorb browser/media rejection rather than leaking an uncaught Promise error.
+      playRequest.catch(() => {});
+    }
+  } catch {
+    // Older browsers can also reject synchronously when a media source is unavailable.
+  }
+}
+
+function startBgm(rate = CONFIG.BGM_NORMAL_PLAYBACK_RATE) {
+  resetAudio(bgm);
+  bgm.playbackRate = rate;
+  bgm.loop = true;
+  state.isDangerDistanceBgmActive = false;
+  requestAudioPlayback(bgm);
+}
+
+function pauseBgm() {
+  resetAudio(bgm);
+  state.isDangerDistanceBgmActive = false;
+}
+
+function stopBgm() {
+  resetAudio(bgm);
+  bgm.playbackRate = CONFIG.BGM_NORMAL_PLAYBACK_RATE;
+  state.isDangerDistanceBgmActive = false;
+}
+
+function getBaseBgmPlaybackRate() {
+  return state.hasCompletedDangerTransition
+    ? CONFIG.BGM_POST_DANGER_PLAYBACK_RATE
+    : CONFIG.BGM_NORMAL_PLAYBACK_RATE;
+}
+
+function updateBgmPlaybackRateForDistance() {
+  if (state.phase === 'dangerTransition' || bgm.paused) return;
+  const shouldUseDangerRate = state.distance < CONFIG.DANGER_DISTANCE;
+  if (shouldUseDangerRate === state.isDangerDistanceBgmActive) return;
+  state.isDangerDistanceBgmActive = shouldUseDangerRate;
+  bgm.playbackRate = shouldUseDangerRate
+    ? CONFIG.BGM_DANGER_DISTANCE_PLAYBACK_RATE
+    : getBaseBgmPlaybackRate();
+}
+
+function playDangerAlert() {
+  resetAudio(dangerAlert);
+  dangerAlert.loop = false;
+  requestAudioPlayback(dangerAlert);
+}
+
+function stopDangerAlert() {
+  resetAudio(dangerAlert);
+}
+
+function clearDangerAlertTimer() {
+  if (state.dangerAlertSfxTimer !== null) {
+    window.clearTimeout(state.dangerAlertSfxTimer);
+    state.dangerAlertSfxTimer = null;
+  }
+}
 
 // 內部索引 0、1、2 各用一組高辨識色；第 4 副牌起改用近似色。
 const WARMUP_PALETTES = [
@@ -131,6 +221,8 @@ const state = {
   // Permanent pair slow accumulates per success because danger matches can have a different gain.
   matchPermanentSlowTotal: 0,
   hasShownDangerTransition: false,
+  hasCompletedDangerTransition: false,
+  isDangerDistanceBgmActive: false,
   flipped: [],
   monsterStunRemaining: 0,
   monsterStunPending: false,
@@ -153,6 +245,7 @@ const state = {
   roundClearTimer: null,
   boardClearStunTimer: null,
   dangerTransitionTimer: null,
+  dangerAlertSfxTimer: null,
   qccTransitionTimer: null,
   feedbackTimer: null,
   phaseToken: 0,
@@ -638,6 +731,7 @@ function finishBoardClearStunBeforeDanger(token) {
 
 function beginDangerTransition() {
   state.phase = 'dangerTransition';
+  pauseBgm();
   clearFeedback();
   syncCardState();
   updateQccUI();
@@ -656,6 +750,16 @@ function beginDangerTransition() {
     () => holdDangerTransition(token),
     CONFIG.DANGER_ENTER_DURATION * 1000,
   );
+  clearDangerAlertTimer();
+  const alertDelayMs = (CONFIG.DANGER_ENTER_DURATION + CONFIG.DANGER_ALERT_SFX_DELAY) * 1000;
+  let alertTimerId;
+  alertTimerId = window.setTimeout(() => {
+    if (state.dangerAlertSfxTimer !== alertTimerId) return;
+    state.dangerAlertSfxTimer = null;
+    if (state.phase !== 'dangerTransition' || token !== state.phaseToken) return;
+    playDangerAlert();
+  }, alertDelayMs);
+  state.dangerAlertSfxTimer = alertTimerId;
 }
 
 function holdDangerTransition(token) {
@@ -683,10 +787,15 @@ function exitDangerTransition(token) {
 function finishDangerTransition(token) {
   if (state.phase !== 'dangerTransition' || token !== state.phaseToken) return;
   state.dangerTransitionTimer = null;
+  clearDangerAlertTimer();
+  stopDangerAlert();
   dangerTransition.hidden = true;
   dangerTransition.classList.remove('is-entering', 'is-holding', 'is-exiting');
   gameShell.classList.remove('is-danger-transition');
+  state.hasCompletedDangerTransition = true;
+  startBgm(CONFIG.BGM_POST_DANGER_PLAYBACK_RATE);
   advanceToNextDeck();
+  updateBgmPlaybackRateForDistance();
 }
 
 function startPreview(renderNewDeck = false) {
@@ -738,6 +847,7 @@ function useQcc() {
 
   applyQccSpeedReduction();
   state.distance = Math.max(state.distance, 132);
+  updateBgmPlaybackRateForDistance();
 
   state.qccCount -= 1;
   state.hasEverUsedQcc = true;
@@ -833,6 +943,7 @@ function frame(timestamp) {
   }
   // Distance is only integrated above while playing; positions and the readout
   // render from that one state on every animation frame, including frozen phases.
+  updateBgmPlaybackRateForDistance();
   renderChasePosition();
   updateDistanceUI();
   updateSpeedUI();
@@ -842,6 +953,7 @@ function frame(timestamp) {
 function endGame() {
   if (state.phase === 'gameOver') return;
   state.phase = 'gameOver';
+  stopBgm();
   clearTimers();
   state.monsterStunRemaining = 0;
   state.monsterStunPending = false;
@@ -1245,12 +1357,15 @@ function clearTimers() {
   state.roundClearTimer = null;
   state.boardClearStunTimer = null;
   state.dangerTransitionTimer = null;
+  clearDangerAlertTimer();
   state.qccTransitionTimer = null;
   state.feedbackTimer = null;
+  stopDangerAlert();
 }
 
 function restartGame() {
   clearTimers();
+  stopBgm();
   Object.assign(state, {
     phase: 'idle',
     deckIndex: 0,
@@ -1267,6 +1382,8 @@ function restartGame() {
     matchedPairCount: 0,
     matchPermanentSlowTotal: 0,
     hasShownDangerTransition: false,
+    hasCompletedDangerTransition: false,
+    isDangerDistanceBgmActive: false,
     flipped: [],
     monsterStunRemaining: 0,
     monsterStunPending: false,
@@ -1323,6 +1440,7 @@ function disableCards(disabled) {
 
 function beginGame() {
   if (state.phase !== 'idle') return;
+  startBgm();
   state.previousTime = 0;
   startPanel.hidden = true;
   gameShell.classList.add('is-running');
