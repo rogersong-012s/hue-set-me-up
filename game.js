@@ -194,7 +194,7 @@ const SHARE_CONFIG = {
   SHARE_TEXT_ENABLED: true,
   SHARE_IMAGE_ENABLED: false,
   // Update this once the public game URL is finalized.
-  SHARE_URL: 'https://example.com',
+  SHARE_URL: 'https://rogersong-012s.github.io/hue-set-me-up/',
 };
 let shareInProgress = false;
 let gameOverResultSnapshot = null;
@@ -1111,8 +1111,7 @@ function buildTextSharePayload(result) {
   if (!SHARE_CONFIG.SHARE_TEXT_ENABLED) return {};
   return {
     title: '我被色記了｜Hue set me up!',
-    text: buildShareText(result),
-    url: SHARE_CONFIG.SHARE_URL,
+    text: buildShareClipboardText(result),
   };
 }
 
