@@ -24,8 +24,8 @@ const CONFIG = {
   LOSE_DISTANCE: 0,
   // 追逐位置與距離共用同一個上限；怪物遠端錨點在跑道 25%。
   MAX_DISTANCE: 300,
-  // 依角色插畫實際留白換算接觸點；位置圖的基準仍是跑道 25% 到 75%。
-  VISUAL_COLLISION_OFFSET_RATIO: 0.7,
+  // Calibrated for the 1.3x right-anchored monster image: at distance 0, its right edge meets the runner's left edge.
+  VISUAL_COLLISION_OFFSET_RATIO: 0.866,
 
   // 預覽期間會暫停計時與相對距離更新；改這個值即可調整每副牌的記憶時間。
   PREVIEW_DURATION: 3,

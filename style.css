@@ -130,41 +130,21 @@ button { font: inherit; }
 @keyframes lane-move { to { transform: translateX(-18%); } }
 
 .character { position: absolute; z-index: 4; bottom: 13%; display: grid; place-items: center; width: clamp(3.25rem, 8.4vw, 6.6rem); aspect-ratio: 1; transform-origin: center bottom; transition: none; }
-.character-art { position: relative; z-index: 2; display: block; line-height: 1; }
 .character-shadow { position: absolute; z-index: 1; bottom: -2%; width: 76%; height: 19%; border: 1px solid #ffe3ad63; border-radius: 50%; background: #211c4380; filter: blur(0.23rem); }
 .hero { left: 75%; transform: translateX(-50%); }
-.player-image { position: absolute; z-index: 2; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; transform: translateY(8%); }
+.player-image { position: absolute; z-index: 2; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; transform-origin: 12.36% 87.48%; transform: translateY(8%) scale(1.22); }
 .hero-trail { position: absolute; z-index: 1; top: 43%; right: 69%; width: 40%; height: 0.3rem; border-radius: 1rem; background: linear-gradient(90deg, transparent, #fff0b5, #ffb378); opacity: 0.76; transform: skewX(-30deg); }
 .hero-trail::before, .hero-trail::after { content: ""; position: absolute; right: 12%; height: 0.13rem; border-radius: 1rem; background: #fff1c9; }
 .hero-trail::before { top: -0.45rem; width: 67%; }
 .hero-trail::after { top: 0.48rem; width: 43%; }
 .monster { left: 0; transform: translate3d(var(--monster-x, 24%), 0, 0) translateX(-50%); will-change: transform; }
-.monster-art { width: 86%; height: 76%; margin-top: 0.28rem; border: 0.14rem solid #382550; border-radius: 43% 44% 34% 38%; background: linear-gradient(145deg, #c182f4, #7952cf 68%, #5c3eae); box-shadow: inset 0.25rem 0.2rem 0 #ffffff45, inset -0.25rem -0.35rem 0 #4c318f80, 0 0.28rem 0 #513478, 0 0.55rem 0.8rem #251a3c61; }
-.monster-art::before { content: ""; position: absolute; z-index: -1; top: 44%; left: -18%; width: 27%; height: 27%; border: 0.12rem solid #382550; border-right: 0; border-radius: 80% 0 0 80%; background: #895fc9; transform: rotate(-12deg); }
-.monster-art::after { content: ""; position: absolute; right: 11%; bottom: 15%; width: 32%; height: 27%; border-radius: 55% 45% 48% 52%; background: #ffd783; box-shadow: inset 0 -0.12rem #e9a85c; opacity: 0.96; }
-.monster-horn { position: absolute; top: -18%; width: 24%; height: 28%; clip-path: polygon(50% 0, 100% 100%, 0 82%); background: linear-gradient(90deg, #ffb06f, #ff7d75); filter: drop-shadow(0 2px #513478); }
-.horn-one { left: 16%; transform: rotate(-16deg); }
-.horn-two { left: 54%; top: -21%; transform: rotate(9deg); }
-.monster-eye { position: absolute; z-index: 2; top: 32%; width: 23%; aspect-ratio: 1; border: 0.08rem solid #4c3374; border-radius: 50%; background: #fff7da; box-shadow: 0 0.08rem 0 #523c73; }
-.monster-eye::after { content: ""; position: absolute; top: 31%; right: 14%; width: 43%; aspect-ratio: 1; border-radius: 50%; background: #332448; box-shadow: 0 0 0 0.04rem #fff; }
-.eye-one { left: 53%; }
-.eye-two { left: 76%; top: 38%; width: 18%; }
-.monster-mouth { position: absolute; z-index: 2; top: 58%; left: 65%; width: 27%; height: 17%; border: 0.07rem solid #583070; border-radius: 0.15rem 0.15rem 0.65rem 0.65rem; background: #71385f; transform: rotate(3deg); }
-.monster-mouth::after { content: ""; position: absolute; top: 0; left: 14%; width: 24%; height: 48%; background: #fff3d2; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.monster-foot { position: absolute; z-index: -1; bottom: -19%; width: 31%; height: 27%; border: 0.12rem solid #3c285d; border-radius: 30% 35% 55% 52%; background: #ff9274; }
-.foot-one { left: 13%; transform: rotate(-9deg); }
-.foot-two { right: 12%; transform: rotate(12deg); }
+.monster-image { position: absolute; z-index: 2; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; transform-origin: 99.83% bottom; transform: translateY(8%) scale(1.3) scale(1.22); }
 .game-shell.is-running .character { animation: runner-hop 0.57s ease-in-out infinite alternate; }
 .game-shell.is-running .monster { animation-delay: -0.25s; }
-.game-shell.is-running .foot-one { animation: foot-kick 280ms ease-in-out infinite alternate; }
-.game-shell.is-running .foot-two { animation: foot-kick 280ms ease-in-out -140ms infinite alternate-reverse; }
 .game-shell.is-caught .monster { z-index: 6; transition: none; }
-.game-shell.is-monster-stunned .monster,
-.game-shell.is-monster-stunned .monster .monster-foot { animation-play-state: paused; }
-.game-shell.is-monster-stunned .monster { filter: saturate(0.65) brightness(1.08); }
+.game-shell.is-monster-stunned .monster { animation-play-state: paused; filter: saturate(0.65) brightness(1.08); }
 .game-shell.is-monster-stunned .monster::after { content: "✦"; position: absolute; z-index: 8; top: -14%; right: -3%; color: #fff2a4; font-size: clamp(1.2rem, 2vw, 1.8rem); text-shadow: 0 0 0.35rem #fff7bf, 0 0 0.8rem #ffd35f; animation: monster-dizzy 160ms ease-in-out infinite alternate; }
 @keyframes runner-hop { from { translate: 0 0; rotate: -1deg; } to { translate: 0 -0.42rem; rotate: 1.5deg; } }
-@keyframes foot-kick { to { rotate: 18deg; translate: 0 0.1rem; } }
 @keyframes monster-dizzy { to { transform: rotate(18deg) translateY(-0.18rem); } }
 
 .start-panel { position: absolute; z-index: 8; top: 10%; right: clamp(0.7rem, 1.8vw, 1.5rem); gap: 0.52rem; padding: 0.42rem 0.52rem 0.42rem 0.66rem; border: 1px solid #fff7dc8c; border-radius: 1rem; color: #322b4d; background: linear-gradient(135deg, #fff9e9, #ffdc9a); box-shadow: 0 0.28rem 0 #a45e62, 0 0.7rem 1.2rem #241a3e38; }
@@ -283,8 +263,7 @@ button { font: inherit; }
 /* One-time danger cutscene: the world stays visible beneath a heavy warning belt. */
 .game-shell.is-danger-transition .cloud,
 .game-shell.is-danger-transition .lane-dashes,
-.game-shell.is-danger-transition .character,
-.game-shell.is-danger-transition .character .monster-foot { animation-play-state: paused; }
+.game-shell.is-danger-transition .character { animation-play-state: paused; }
 .danger-transition { position: absolute; z-index: 24; inset: 0; display: grid; place-items: center; overflow: hidden; background: #17152b52; backdrop-filter: blur(1px); pointer-events: auto; }
 .danger-transition[hidden] { display: none; }
 .danger-tape { position: absolute; top: 50%; left: 0; display: grid; place-items: center; width: 100%; min-height: clamp(5.25rem, 13vh, 8rem); padding: 0.55rem 1rem; border: 0; background: #ed2939; box-shadow: 0 0.6rem 1.2rem #120e27a8, 0 0 2rem #ed293980; transform: translate3d(-110%, -50%, 0); will-change: transform; }
