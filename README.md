@@ -2,6 +2,9 @@
 
 「近似色記憶翻牌 × 角色逃生追逐」的純前端網頁遊戲 DEMO。以 HTML、CSS 和原生 JavaScript 製作，沒有建置步驟、套件或後端。
 
+- **線上遊玩：** [我被色記了 / Hue set me up!](https://rogersong-012s.github.io/hue-set-me-up/)
+- **GitHub Repository：** [rogersong-012s/hue-set-me-up](https://github.com/rogersong-012s/hue-set-me-up)
+
 ## 本地遊玩
 
 直接雙擊 `index.html`，或將它拖進瀏覽器即可遊玩；不需要啟動 localhost，也不需要安裝 npm 套件。按「開始逃跑」後先有 3 秒全牌預覽，蓋牌後才開始生存計時與追逐。
