@@ -1,8 +1,8 @@
 // 調整手感與預覽時間時，優先從這裡修改數值。
 const CONFIG = {
-  BGM_VOLUME: 0.5, // Main background music volume (0–1).
+  BGM_VOLUME: 1.0, // Main background music volume (0–1).
   DANGER_ALERT_SFX_DELAY: -0.25, // Seconds after the danger entrance completes.
-  DANGER_ALERT_SFX_VOLUME: 0.8,
+  DANGER_ALERT_SFX_VOLUME: 0.4,
   BGM_NORMAL_PLAYBACK_RATE: 1.0,
   BGM_POST_DANGER_PLAYBACK_RATE: 1.08,
   BGM_DANGER_DISTANCE_PLAYBACK_RATE: 1.3,
