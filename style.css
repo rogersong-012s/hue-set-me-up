@@ -300,6 +300,9 @@ button { font: inherit; }
     max-height: 100vh;
     max-height: 100svh;
   }
+  /* Keep desktop artwork unchanged; enlarge both mobile sprites by the same extra factor. */
+  .player-image { transform: translateY(8%) scale(1.22) scale(1.5); }
+  .monster-image { transform: translateY(8%) scale(1.3) scale(1.22) scale(1.5); }
   .game-shell { grid-template-rows: minmax(0, 0.44fr) minmax(0, 0.56fr); }
   .danger-tape { min-height: 5rem; padding-inline: 0.5rem; }
   .danger-tape::before, .danger-tape::after { height: 0.32rem; }
