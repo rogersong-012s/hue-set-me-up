@@ -15,7 +15,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+html, body { width: 100%; max-width: 100%; min-width: 0; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 body {
   height: 100vh;
   height: 100dvh;
@@ -29,8 +29,11 @@ button { font: inherit; }
 .game-shell {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 0.44fr) minmax(0, 0.56fr);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 100vh;
   height: 100dvh;
   max-height: 100dvh;
@@ -45,7 +48,11 @@ button { font: inherit; }
   position: relative;
   z-index: 1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   place-items: center;
   min-height: 0;
   overflow: hidden;
@@ -55,7 +62,7 @@ button { font: inherit; }
     radial-gradient(ellipse at 6% 0%, #7360a44d, transparent 45%),
     linear-gradient(125deg, #211e3c, #272443 55%, #302543);
 }
-.chase-stage { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: clamp(0.3rem, 0.8vh, 0.68rem); width: min(100%, 840px); height: 100%; min-height: 0; border: 1px solid transparent; border-radius: 1.25rem; }
+.chase-stage { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: clamp(0.3rem, 0.8vh, 0.68rem); width: min(100%, 840px); max-width: 100%; min-width: 0; height: 100%; min-height: 0; border: 1px solid transparent; border-radius: 1.25rem; }
 .chase-stage::before { content: ""; position: absolute; z-index: 10; inset: 0; border: 0 solid transparent; border-radius: inherit; opacity: 0; pointer-events: none; }
 .chase-stage.danger-near::before { animation: chase-danger-pulse 780ms ease-in-out infinite alternate; }
 @keyframes chase-danger-pulse {
@@ -64,7 +71,7 @@ button { font: inherit; }
 }
 .topbar, .brand, .run-stats, .stat-chip, .chase-footer, .combo-readout, .match-readout,
 .chase-tools, .memory-header, .board-footer, .start-panel, .start-button { display: flex; align-items: center; }
-.topbar { position: relative; z-index: 8; justify-content: space-between; min-height: 1.85rem; }
+.topbar { position: relative; z-index: 8; justify-content: space-between; min-width: 0; max-width: 100%; min-height: 1.85rem; }
 .brand { gap: 0.56rem; color: #fffaf0; font-size: clamp(1.08rem, 1.4vw, 1.34rem); font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
 .brand small { display: block; margin-top: 0.2rem; color: #c4bdd9; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; }
 .brand-mark { display: grid; place-items: center; width: clamp(1.7rem, 2.2vw, 2.2rem); aspect-ratio: 1; border: 2px solid #fff4b65c; border-radius: 0.72rem; color: #4a366b; background: linear-gradient(145deg, #ffe078, #ffab65); box-shadow: 0 0.22rem 0 #a65f5b, 0 0.4rem 1rem #ffab6542; font-size: 1rem; }
@@ -105,7 +112,7 @@ button { font: inherit; }
 .scene-copy { position: absolute; z-index: 5; top: clamp(0.68rem, 2vh, 1.35rem); left: clamp(0.8rem, 1.8vw, 1.55rem); max-width: 58%; }
 .scene-copy p { margin: 0.45rem 0 0 0.18rem; color: #fff9e9; font-size: clamp(0.88rem, 1.05vw, 1.05rem); font-weight: 700; text-shadow: 0 2px 5px #59365f80; }
 
-.track { position: absolute; z-index: 1; inset: 0; overflow: hidden; }
+.track { position: absolute; z-index: 1; inset: 0; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
 .mountain { position: absolute; bottom: 19%; width: 55%; height: 41%; clip-path: polygon(0 100%, 22% 36%, 34% 66%, 52% 0, 70% 58%, 82% 33%, 100% 100%); }
 .mountain-back { left: -9%; background: linear-gradient(135deg, #655788, #514c7c); opacity: 0.92; }
 .mountain-front { right: -12%; bottom: 17%; width: 58%; height: 36%; background: linear-gradient(135deg, #826186, #66507e); clip-path: polygon(0 100%, 21% 26%, 41% 72%, 66% 4%, 83% 55%, 100% 100%); opacity: 0.8; }
@@ -203,7 +210,7 @@ button { font: inherit; }
   76% { opacity: 1; transform: scale(1.03); }
   100% { opacity: 0; transform: scale(1.3); filter: blur(2px); }
 }
-.chase-footer { position: relative; z-index: 8; justify-content: space-between; min-height: 2.65rem; gap: clamp(0.35rem, 0.9vw, 0.75rem); }
+.chase-footer { position: relative; z-index: 8; justify-content: space-between; min-width: 0; max-width: 100%; min-height: 2.65rem; gap: clamp(0.35rem, 0.9vw, 0.75rem); }
 .chase-tools { flex: 0 0 auto; gap: clamp(0.35rem, 0.7vw, 0.58rem); }
 .combo-readout { gap: 0.5rem; min-width: 7.7rem; }
 .combo-icon { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border: 1px solid #fff2af78; border-radius: 0.58rem; color: #51345d; background: linear-gradient(145deg, #ffe27a, #ffab64); box-shadow: 0 0.2rem 0 #a96061; font-size: 0.9rem; transition: transform 180ms ease, background 180ms ease; }
@@ -233,13 +240,13 @@ button { font: inherit; }
 .match-dot { width: 0.48rem; height: 0.48rem; border: 1px solid #dcffb77d; border-radius: 50%; background: #a8eb9c; box-shadow: 0 0 0 0.2rem #a8eb9c21, 0 0 0.55rem #a8eb9c; }
 
 /* MEMORY TABLE */
-.memory-panel { display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; min-height: 0; overflow: hidden; padding: clamp(0.55rem, 1.5vh, 1.15rem) clamp(0.75rem, 3vw, 2.8rem); background: linear-gradient(130deg, #25213f, #201d38 55%, #29203c); }
-.memory-stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: clamp(0.42rem, 1vh, 0.85rem); width: min(100%, 840px); height: min(100%, 30rem); max-height: 100%; min-height: 0; margin: auto; padding: clamp(0.65rem, 1.4vw, 1.15rem) clamp(0.72rem, 1.7vw, 1.35rem) clamp(0.55rem, 1.1vw, 0.9rem); border: 2px solid #fff4d8; border-radius: clamp(1.1rem, 2vw, 1.65rem); background: linear-gradient(145deg, #fff8e9, #ffefce); box-shadow: 0 0.34rem 0 #a46a67, 0 0.9rem 2rem #100f254d, inset 0 1px #fff; }
+.memory-panel { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); place-items: center; width: 100%; max-width: 100%; min-width: 0; min-height: 0; overflow: hidden; padding: clamp(0.55rem, 1.5vh, 1.15rem) clamp(0.75rem, 3vw, 2.8rem); background: linear-gradient(130deg, #25213f, #201d38 55%, #29203c); }
+.memory-stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: clamp(0.42rem, 1vh, 0.85rem); width: min(100%, 840px); max-width: 100%; min-width: 0; height: min(100%, 30rem); max-height: 100%; min-height: 0; margin: auto; padding: clamp(0.65rem, 1.4vw, 1.15rem) clamp(0.72rem, 1.7vw, 1.35rem) clamp(0.55rem, 1.1vw, 0.9rem); border: 2px solid #fff4d8; border-radius: clamp(1.1rem, 2vw, 1.65rem); background: linear-gradient(145deg, #fff8e9, #ffefce); box-shadow: 0 0.34rem 0 #a46a67, 0 0.9rem 2rem #100f254d, inset 0 1px #fff; }
 .memory-card { transition: opacity 420ms ease, filter 420ms ease, transform 180ms ease; }
 .game-shell.is-qcc-transitioning .memory-card { opacity: 0; filter: blur(2px); transform: scale(0.84); pointer-events: none; }
 .game-shell.is-qcc-transitioning .memory-stage { border-color: #d4bcff; box-shadow: 0 0.34rem 0 #8d72b4, 0 0 1.2rem #bd91ff71, 0 0.9rem 2rem #100f254d, inset 0 1px #fff; }
 .game-shell.is-previewing .memory-stage { border-color: #ffe18e; box-shadow: 0 0.34rem 0 #a46a67, 0 0 1.2rem #ffcf665c, 0 0.9rem 2rem #100f254d, inset 0 1px #fff; }
-.memory-header { justify-content: space-between; min-height: 2.7rem; gap: 0.8rem; }
+.memory-header { justify-content: space-between; min-width: 0; max-width: 100%; min-height: 2.7rem; gap: 0.8rem; }
 .eyebrow { margin: 0 0 0.18rem; color: #9971c3; font-size: 0.76rem; font-weight: 1000; letter-spacing: 0.17em; }
 .memory-header h1 { margin: 0; color: #31284c; font-size: clamp(1.25rem, 1.9vw, 1.75rem); font-weight: 1000; letter-spacing: -0.04em; line-height: 1.15; }
 .memory-header p { margin: 0.28rem 0 0; color: #806e88; font-size: clamp(0.86rem, 1vw, 1rem); font-weight: 600; }
@@ -247,7 +254,7 @@ button { font: inherit; }
 .deck-badge span { margin-right: 0.22rem; color: #7657c5; font-size: 0.9rem; }
 .deck-badge strong { color: #4d3d71; font-size: 0.9rem; }
 .deck-badge small { font-size: 0.72rem; font-weight: 1000; letter-spacing: 0.06em; }
-.card-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(0.42rem, 1vw, 0.88rem); min-height: 0; perspective: 1100px; }
+.card-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(0.42rem, 1vw, 0.88rem); width: 100%; max-width: 100%; min-width: 0; min-height: 0; perspective: 1100px; }
 .memory-card { position: relative; display: block; width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: clamp(0.72rem, 1.2vw, 1.05rem); background: transparent; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .memory-card:disabled { cursor: default; }
 .card-inner { position: absolute; inset: 0; display: block; border-radius: inherit; transform-style: preserve-3d; transition: transform 290ms cubic-bezier(.2,.72,.24,1); }
@@ -342,9 +349,15 @@ button { font: inherit; }
   .stat-chip strong { min-width: 0; font-size: clamp(0.8rem, 3.4vw, 0.9rem); white-space: nowrap; }
   .time-chip strong { min-width: 0; }
   .distance-chip .stat-label { white-space: nowrap; }
+  .chase-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tools matches" "tip tip"; align-items: center; justify-content: initial; row-gap: 0.16rem; column-gap: 0.45rem; }
+  .chase-tools { grid-area: tools; min-width: 0; justify-self: start; gap: 0.35rem; }
+  .match-readout { grid-area: matches; min-width: 0; white-space: nowrap; }
+  .chase-tip { grid-area: tip; width: 100%; max-width: none; min-width: 0; overflow: visible; font-size: clamp(0.7rem, 2.8vw, 0.78rem); line-height: 1.2; text-align: left; text-overflow: clip; white-space: normal; }
   .memory-panel { padding-right: clamp(0.45rem, 2vw, 0.9rem); padding-left: clamp(0.45rem, 2vw, 0.9rem); }
   .chase-stage { gap: clamp(0.25rem, 0.7vh, 0.5rem); }
   .memory-stage { gap: clamp(0.35rem, 0.8vh, 0.6rem); padding: clamp(0.55rem, 1.5vw, 0.8rem); }
+  .memory-header > div { flex: 1 1 auto; min-width: 0; }
+  .deck-badge { flex: 0 0 auto; }
   .card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(0.36rem, 1.35vw, 0.58rem); }
   .memory-card { border-radius: 0.78rem; }
   .card-back::before { inset: 0.3rem; border-radius: 0.5rem; }
@@ -377,7 +390,7 @@ button { font: inherit; }
   .start-panel strong { font-size: 0.82rem; }
   .start-panel p { display: none; }
   .start-button { padding: 0.48rem 0.56rem; font-size: 0.82rem; }
-  .chase-footer { gap: 0.28rem; }
+  .chase-footer { row-gap: 0.12rem; column-gap: 0.32rem; }
   .combo-readout { min-width: 6.4rem; gap: 0.32rem; }
   .combo-icon { width: 1.44rem; height: 1.44rem; }
   .combo-readout small { font-size: 0.74rem; }

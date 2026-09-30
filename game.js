@@ -190,10 +190,8 @@ const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutoria
 const SHARE_IMAGE_WIDTH = 1080;
 const SHARE_IMAGE_HEIGHT = 1350;
 const SHARE_IMAGE_FILENAME = 'hue-set-me-up-result.png';
-const SHARE_CONFIG = {
-  // Replace this placeholder once the public game URL is finalized.
-  url: 'https://#',
-};
+// Update this once the public game URL is finalized.
+const SHARE_URL = 'https://example.com';
 let shareInProgress = false;
 let gameOverResultSnapshot = null;
 
@@ -1092,7 +1090,19 @@ function canShareFiles(file) {
 }
 
 function buildShareText(result) {
-  return `我在《我被色記了》撐了 ${result.survivalTime}！\n最高 Combo：${result.bestCombo}\n\n你能撐多久？\n\n${SHARE_CONFIG.url}`;
+  return `我在《我被色記了》撐了 ${result.survivalTime}！\n最高 Combo：${result.bestCombo}\n\n你能撐多久？`;
+}
+
+function writeShareTextToClipboard(text) {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+    return Promise.resolve(false);
+  }
+
+  try {
+    return navigator.clipboard.writeText(text).then(() => true, () => false);
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 async function shareResultImage() {
@@ -1114,20 +1124,48 @@ async function shareResultImage() {
     const useMobileFileShare = isMobileShareClient() && canShareFiles(resultFile);
 
     if (useMobileFileShare) {
+      const shareText = buildShareText(gameOverResultSnapshot);
+      const clipboardText = `${shareText}\n\n${SHARE_URL}`;
+      // Start this from the tap handler before opening the native sheet. Clipboard
+      // failures are non-blocking, and we do not await it before navigator.share().
+      const clipboardWrite = writeShareTextToClipboard(clipboardText);
       try {
         await navigator.share({
           files: [resultFile],
           title: '我被色記了｜Hue set me up!',
-          text: buildShareText(gameOverResultSnapshot),
+          text: shareText,
+          url: SHARE_URL,
         });
-        setShareStatus('分享選單已開啟', runToken);
+        if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+        const copied = await clipboardWrite;
+        setShareStatus(copied ? '分享已開啟，文案與網址已複製' : '分享選單已開啟', runToken);
       } catch (error) {
         if (state.runToken !== runToken || state.phase !== 'gameOver') return;
         if (error?.name === 'AbortError') {
-          setShareStatus('已取消分享', runToken);
+          const copied = await clipboardWrite;
+          setShareStatus(copied ? '已取消分享，文案與網址已複製' : '已取消分享', runToken);
         } else {
-          downloadShareImage(resultBlob);
-          setShareStatus('分享未完成，已下載 PNG', runToken);
+          try {
+            await navigator.share({
+              files: [resultFile],
+              title: '我被色記了｜Hue set me up!',
+              text: clipboardText,
+            });
+            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+            const copied = await clipboardWrite;
+            setShareStatus(copied ? '分享已開啟，文案與網址已複製' : '分享選單已開啟', runToken);
+          } catch (fallbackError) {
+            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+            const copied = await clipboardWrite;
+            if (fallbackError?.name === 'AbortError') {
+              setShareStatus(copied ? '已取消分享，文案與網址已複製' : '已取消分享', runToken);
+            } else {
+              downloadShareImage(resultBlob);
+              setShareStatus(copied
+                ? '分享未完成，已下載 PNG；文案與網址已複製'
+                : '分享未完成，已下載 PNG', runToken);
+            }
+          }
         }
       }
     } else {
