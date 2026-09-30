@@ -190,8 +190,12 @@ const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutoria
 const SHARE_IMAGE_WIDTH = 1080;
 const SHARE_IMAGE_HEIGHT = 1350;
 const SHARE_IMAGE_FILENAME = 'hue-set-me-up-result.png';
-// Update this once the public game URL is finalized.
-const SHARE_URL = 'https://example.com';
+const SHARE_CONFIG = {
+  SHARE_TEXT_ENABLED: true,
+  SHARE_IMAGE_ENABLED: false,
+  // Update this once the public game URL is finalized.
+  SHARE_URL: 'https://example.com',
+};
 let shareInProgress = false;
 let gameOverResultSnapshot = null;
 
@@ -856,7 +860,7 @@ function endGame() {
   $('#finalTime').textContent = gameOverResultSnapshot.survivalTime;
   $('#finalCombo').textContent = gameOverResultSnapshot.bestCombo;
   shareStatus.textContent = '';
-  shareButton.disabled = shareInProgress;
+  shareButton.disabled = shareInProgress || !isShareEnabled();
   shareButton.textContent = shareInProgress ? '分享中…' : getShareButtonLabel();
   gameOverOverlay.hidden = false;
   $('#restartButton').focus({ preventScroll: true });
@@ -1077,7 +1081,17 @@ function isMobileShareClient() {
 }
 
 function getShareButtonLabel() {
-  return isMobileShareClient() ? '分享' : '下載圖片';
+  if (!isShareEnabled()) return '分享已停用';
+  if (SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
+    if (isMobileShareClient() && SHARE_CONFIG.SHARE_TEXT_ENABLED) return '分享';
+    if (!isMobileShareClient() && SHARE_CONFIG.SHARE_TEXT_ENABLED) return '下載圖片並複製';
+    return isMobileShareClient() ? '分享圖片' : '下載圖片';
+  }
+  return isMobileShareClient() ? '分享' : '複製分享內容';
+}
+
+function isShareEnabled() {
+  return SHARE_CONFIG.SHARE_TEXT_ENABLED || SHARE_CONFIG.SHARE_IMAGE_ENABLED;
 }
 
 function canShareFiles(file) {
@@ -1091,6 +1105,19 @@ function canShareFiles(file) {
 
 function buildShareText(result) {
   return `我在《我被色記了》撐了 ${result.survivalTime}！\n最高 Combo：${result.bestCombo}\n\n你能撐多久？`;
+}
+
+function buildTextSharePayload(result) {
+  if (!SHARE_CONFIG.SHARE_TEXT_ENABLED) return {};
+  return {
+    title: '我被色記了｜Hue set me up!',
+    text: buildShareText(result),
+    url: SHARE_CONFIG.SHARE_URL,
+  };
+}
+
+function buildShareClipboardText(result) {
+  return `${buildShareText(result)}\n\n${SHARE_CONFIG.SHARE_URL}`;
 }
 
 function writeShareTextToClipboard(text) {
@@ -1107,77 +1134,97 @@ function writeShareTextToClipboard(text) {
 
 async function shareResultImage() {
   if (state.phase !== 'gameOver' || shareInProgress || !gameOverResultSnapshot) return;
+  if (!isShareEnabled()) {
+    shareButton.disabled = true;
+    setShareStatus('分享功能目前已停用', state.runToken);
+    return;
+  }
 
   shareInProgress = true;
   const runToken = state.runToken;
   shareButton.disabled = true;
-  shareButton.textContent = '分享中…';
-  shareStatus.textContent = '正在準備分享圖…';
+  shareButton.textContent = SHARE_CONFIG.SHARE_IMAGE_ENABLED ? '準備圖片…' : '分享中…';
+  shareStatus.textContent = SHARE_CONFIG.SHARE_IMAGE_ENABLED ? '正在準備分享圖…' : '';
 
   try {
+    const isMobile = isMobileShareClient();
+    const textPayload = buildTextSharePayload(gameOverResultSnapshot);
+    const clipboardText = SHARE_CONFIG.SHARE_TEXT_ENABLED
+      ? buildShareClipboardText(gameOverResultSnapshot)
+      : '';
+
+    if (!SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
+      if (isMobile && typeof navigator.share === 'function') {
+        try {
+          await navigator.share(textPayload);
+          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+          setShareStatus('分享選單已開啟', runToken);
+        } catch (error) {
+          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+          if (error?.name === 'AbortError') {
+            setShareStatus('已取消分享', runToken);
+          } else {
+            const copied = await writeShareTextToClipboard(clipboardText);
+            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+            setShareStatus(copied ? '分享文字與網址已複製' : '分享失敗，剪貼簿也無法使用', runToken);
+          }
+        }
+        return;
+      }
+
+      const copied = await writeShareTextToClipboard(clipboardText);
+      if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+      setShareStatus(copied ? '分享文字與網址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限', runToken);
+      return;
+    }
+
     const resultBlob = await generateShareImage(gameOverResultSnapshot);
     if (state.runToken !== runToken || state.phase !== 'gameOver') return;
     const resultFile = typeof File === 'function'
       ? new File([resultBlob], SHARE_IMAGE_FILENAME, { type: 'image/png' })
       : null;
-    // Desktop always downloads. Native file sharing is limited to mobile/touch clients.
-    const useMobileFileShare = isMobileShareClient() && canShareFiles(resultFile);
+    const canShareImage = isMobile && canShareFiles(resultFile);
 
-    if (useMobileFileShare) {
-      const shareText = buildShareText(gameOverResultSnapshot);
-      const clipboardText = `${shareText}\n\n${SHARE_URL}`;
-      // Start this from the tap handler before opening the native sheet. Clipboard
-      // failures are non-blocking, and we do not await it before navigator.share().
-      const clipboardWrite = writeShareTextToClipboard(clipboardText);
+    if (canShareImage) {
+      const sharePayload = {
+        ...textPayload,
+        files: [resultFile],
+      };
       try {
-        await navigator.share({
-          files: [resultFile],
-          title: '我被色記了｜Hue set me up!',
-          text: shareText,
-          url: SHARE_URL,
-        });
+        await navigator.share(sharePayload);
         if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-        const copied = await clipboardWrite;
-        setShareStatus(copied ? '分享已開啟，文案與網址已複製' : '分享選單已開啟', runToken);
+        setShareStatus('分享選單已開啟', runToken);
       } catch (error) {
         if (state.runToken !== runToken || state.phase !== 'gameOver') return;
         if (error?.name === 'AbortError') {
-          const copied = await clipboardWrite;
-          setShareStatus(copied ? '已取消分享，文案與網址已複製' : '已取消分享', runToken);
+          setShareStatus('已取消分享', runToken);
         } else {
-          try {
-            await navigator.share({
-              files: [resultFile],
-              title: '我被色記了｜Hue set me up!',
-              text: clipboardText,
-            });
-            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-            const copied = await clipboardWrite;
-            setShareStatus(copied ? '分享已開啟，文案與網址已複製' : '分享選單已開啟', runToken);
-          } catch (fallbackError) {
-            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-            const copied = await clipboardWrite;
-            if (fallbackError?.name === 'AbortError') {
-              setShareStatus(copied ? '已取消分享，文案與網址已複製' : '已取消分享', runToken);
-            } else {
-              downloadShareImage(resultBlob);
-              setShareStatus(copied
-                ? '分享未完成，已下載 PNG；文案與網址已複製'
-                : '分享未完成，已下載 PNG', runToken);
-            }
-          }
+          downloadShareImage(resultBlob);
+          const copied = SHARE_CONFIG.SHARE_TEXT_ENABLED
+            ? await writeShareTextToClipboard(clipboardText)
+            : false;
+          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+          setShareStatus(copied ? '已下載 PNG；分享文字與網址已複製' : '分享未完成，已下載 PNG', runToken);
         }
       }
     } else {
       downloadShareImage(resultBlob);
-      setShareStatus('已下載分享圖', runToken);
+      if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
+        const copied = await writeShareTextToClipboard(clipboardText);
+        if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+        setShareStatus(copied ? '已下載分享圖；分享文字與網址已複製' : '已下載分享圖，分享文字複製失敗', runToken);
+      } else {
+        setShareStatus('已下載分享圖', runToken);
+      }
     }
   } catch {
-    setShareStatus('分享圖處理失敗，請再試一次', runToken);
+    setShareStatus(SHARE_CONFIG.SHARE_IMAGE_ENABLED
+      ? '分享圖處理失敗，請再試一次'
+      : '分享處理失敗，請再試一次', runToken);
   } finally {
     if (state.runToken === runToken) {
       shareInProgress = false;
-      shareButton.disabled = state.phase !== 'gameOver';
+      shareButton.disabled = state.phase !== 'gameOver' || !isShareEnabled();
       shareButton.textContent = getShareButtonLabel();
     }
   }
@@ -1247,7 +1294,7 @@ function restartGame() {
   gameShell.style.removeProperty('--run-cycle');
   gameOverResultSnapshot = null;
   shareInProgress = false;
-  shareButton.disabled = false;
+  shareButton.disabled = !isShareEnabled();
   shareButton.textContent = getShareButtonLabel();
   shareStatus.textContent = '';
   gameOverOverlay.hidden = true;

@@ -37,6 +37,7 @@ button { font: inherit; }
   height: 100vh;
   height: 100dvh;
   max-height: 100dvh;
+  min-height: 0;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   overflow: hidden;
@@ -333,6 +334,13 @@ button { font: inherit; }
 @keyframes qcc-target-pulse { to { transform: scale(1.09); filter: brightness(1.45); } }
 
 @media (max-width: 700px) {
+  /* Use the smallest mobile viewport so browser toolbars cannot resize the stage. */
+  body, .game-shell {
+    height: 100vh;
+    height: 100svh;
+    max-height: 100vh;
+    max-height: 100svh;
+  }
   .game-shell { grid-template-rows: minmax(0, 0.44fr) minmax(0, 0.56fr); }
   .danger-tape { min-height: 5rem; padding-inline: 0.5rem; }
   .danger-tape::before, .danger-tape::after { height: 0.32rem; }
@@ -349,13 +357,17 @@ button { font: inherit; }
   .stat-chip strong { min-width: 0; font-size: clamp(0.8rem, 3.4vw, 0.9rem); white-space: nowrap; }
   .time-chip strong { min-width: 0; }
   .distance-chip .stat-label { white-space: nowrap; }
-  .chase-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tools matches" "tip tip"; align-items: center; justify-content: initial; row-gap: 0.16rem; column-gap: 0.45rem; }
-  .chase-tools { grid-area: tools; min-width: 0; justify-self: start; gap: 0.35rem; }
-  .match-readout { grid-area: matches; min-width: 0; white-space: nowrap; }
-  .chase-tip { grid-area: tip; width: 100%; max-width: none; min-width: 0; overflow: visible; font-size: clamp(0.7rem, 2.8vw, 0.78rem); line-height: 1.2; text-align: left; text-overflow: clip; white-space: normal; }
+  .chase-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 2.55rem 0.9rem; grid-template-areas: "tools matches" "tip tip"; align-items: center; justify-content: initial; width: 100%; height: 3.7rem; min-height: 3.7rem; max-height: 3.7rem; row-gap: 0.12rem; column-gap: 0.45rem; overflow: hidden; }
+  .chase-tools { grid-area: tools; min-width: 0; height: 2.55rem; justify-self: start; gap: 0.35rem; }
+  .match-readout { grid-area: matches; min-width: 0; height: 2.55rem; white-space: nowrap; }
+  .chase-tip { grid-area: tip; display: block; width: 100%; max-width: none; min-width: 0; height: 0.9rem; overflow: hidden; font-size: clamp(0.7rem, 2.8vw, 0.78rem); line-height: 0.9rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
   .memory-panel { padding-right: clamp(0.45rem, 2vw, 0.9rem); padding-left: clamp(0.45rem, 2vw, 0.9rem); }
-  .chase-stage { gap: clamp(0.25rem, 0.7vh, 0.5rem); }
-  .memory-stage { gap: clamp(0.35rem, 0.8vh, 0.6rem); padding: clamp(0.55rem, 1.5vw, 0.8rem); }
+  .chase-stage { grid-template-rows: 4rem minmax(0, 1fr) 3.7rem; gap: 0.3rem; }
+  .topbar { height: 4rem; min-height: 4rem; max-height: 4rem; grid-template-rows: 1.8rem 1.75rem; align-content: space-between; gap: 0; }
+  .memory-stage { grid-template-rows: 5.4rem minmax(0, 1fr) 1rem; gap: 0.4rem; padding: clamp(0.55rem, 1.5vw, 0.8rem); }
+  .memory-header { height: 5.4rem; min-height: 5.4rem; max-height: 5.4rem; overflow: hidden; }
+  .memory-header p { display: -webkit-box; overflow: hidden; line-height: 1.15; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .board-footer { height: 1rem; min-height: 1rem; max-height: 1rem; line-height: 1rem; overflow: hidden; }
   .memory-header > div { flex: 1 1 auto; min-width: 0; }
   .deck-badge { flex: 0 0 auto; }
   .card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(0.36rem, 1.35vw, 0.58rem); }
@@ -367,7 +379,7 @@ button { font: inherit; }
   .start-sparkle { width: 1.3rem; height: 1.3rem; font-size: 0.8rem; }
   .start-panel p { max-width: 7rem; font-size: 0.78rem; }
   .start-button { margin-left: 0.06rem; padding: 0.54rem 0.62rem; border-radius: 0.62rem; font-size: 0.84rem; }
-  .chase-tip { max-width: 45%; }
+  .chase-tip { max-width: none; }
   .board-footer { font-size: 0.74rem; }
   .footer-key { display: none; }
 }
@@ -427,7 +439,7 @@ button { font: inherit; }
   .memory-header p { margin-top: 0.15rem; }
 }
 
-@media (max-height: 520px) {
+@media (max-height: 520px) and (min-width: 701px) {
   .game-shell { grid-template-rows: minmax(0, 0.4fr) minmax(0, 0.6fr); }
   .chase-panel { padding-top: 0.28rem; padding-bottom: 0.24rem; gap: 0.12rem; }
   .memory-panel { padding-top: 0.25rem; padding-bottom: 0.25rem; }
@@ -438,6 +450,20 @@ button { font: inherit; }
   .card-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 0.28rem; }
   .start-panel { top: 6%; right: 0.55rem; }
   .game-over { padding-top: 1rem; }
+}
+
+@media (max-width: 700px) and (max-height: 520px) {
+  .game-shell { grid-template-rows: minmax(0, 0.4fr) minmax(0, 0.6fr); }
+  .chase-stage { grid-template-rows: 3.4rem minmax(0, 1fr) 2.55rem; gap: 0.2rem; }
+  .topbar { height: 3.4rem; min-height: 3.4rem; max-height: 3.4rem; grid-template-rows: 1.45rem 1.55rem; }
+  .chase-footer { grid-template-rows: 2.55rem 0; height: 2.55rem; min-height: 2.55rem; max-height: 2.55rem; row-gap: 0; }
+  .chase-tip { display: none; }
+  .memory-stage { grid-template-rows: 2.7rem minmax(0, 1fr) 0.8rem; gap: 0.2rem; padding: 0.4rem 0.5rem; }
+  .memory-header { height: 2.7rem; min-height: 2.7rem; max-height: 2.7rem; }
+  .memory-header .eyebrow, .memory-header p, .deck-badge { display: none; }
+  .memory-header h1 { font-size: 1rem; }
+  .board-footer { height: 0.8rem; min-height: 0.8rem; max-height: 0.8rem; line-height: 0.8rem; }
+  .card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
