@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#19172e">
-    <title>色逃 Color Dash</title>
+    <title>我被色記了｜Hue set me up!</title>
     <link rel="stylesheet" href="style.css">
     <script src="game.js" defer></script>
   </head>
@@ -13,9 +13,9 @@
       <section class="chase-panel" aria-label="逃跑追逐場景">
         <div class="chase-stage">
           <header class="topbar">
-            <div class="brand" aria-label="色逃 Color Dash">
+            <div class="brand" aria-label="我被色記了 / Hue set me up!">
               <span class="brand-mark" aria-hidden="true">✦</span>
-              <span>色逃 <small>COLOR DASH · HUE ESCAPE</small></span>
+              <span>我被色記了 <small>Hue set me up!</small></span>
             </div>
             <div class="run-stats">
               <div class="stat-chip time-chip"><span class="stat-label">存活</span><strong id="timeValue">0.0<span>s</span></strong></div>
@@ -130,7 +130,11 @@
             <div><span>存活時間</span><strong id="finalTime">0.0 秒</strong></div>
             <div><span>最高 Combo</span><strong id="finalCombo">0</strong></div>
           </div>
-          <button class="restart-button" id="restartButton" type="button">再玩一次 <span aria-hidden="true">↻</span></button>
+          <div class="game-over-actions">
+            <button class="restart-button" id="restartButton" type="button">再玩一次 <span aria-hidden="true">↻</span></button>
+            <button class="restart-button share-button" id="shareButton" type="button">分享</button>
+          </div>
+          <p class="share-status" id="shareStatus" aria-live="polite" aria-atomic="true"></p>
         </div>
       </section>
 
