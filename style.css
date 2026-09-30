@@ -133,27 +133,7 @@ button { font: inherit; }
 .character-art { position: relative; z-index: 2; display: block; line-height: 1; }
 .character-shadow { position: absolute; z-index: 1; bottom: -2%; width: 76%; height: 19%; border: 1px solid #ffe3ad63; border-radius: 50%; background: #211c4380; filter: blur(0.23rem); }
 .hero { left: 75%; transform: translateX(-50%); }
-/* 角色用 CSS 畫出面向右側的鼻尖、前伸手臂與前跨腿；不依賴方向不一的 emoji，也不做 scaleX 翻轉。 */
-.hero-art { width: 80%; height: 90%; transform: none; }
-.runner-ponytail, .runner-hair, .runner-head, .runner-torso, .runner-scarf,
-.runner-arm, .runner-leg { position: absolute; display: block; }
-.runner-ponytail { z-index: 2; top: 12%; left: 37%; width: 26%; height: 16%; border: 0.1rem solid #493154; border-radius: 90% 12% 78% 15%; background: #e78276; transform: rotate(-22deg); }
-.runner-hair { z-index: 3; top: 4%; left: 53%; width: 32%; height: 25%; border-radius: 56% 45% 30% 35%; background: linear-gradient(145deg, #69416a, #3f2c55); transform: rotate(10deg); }
-.runner-head { z-index: 7; top: 7%; left: 58%; width: 25%; height: 24%; border: 0.1rem solid #633f58; border-radius: 48% 52% 45% 48%; background: linear-gradient(140deg, #ffd0a7, #ec9a80); box-shadow: inset -0.14rem -0.12rem #df8276; }
-.runner-head::before { content: ""; position: absolute; top: 34%; right: 15%; width: 12%; aspect-ratio: 1; border-radius: 50%; background: #352541; }
-.runner-head::after { content: ""; position: absolute; top: 49%; right: -10%; width: 20%; height: 17%; border-radius: 60% 40% 65% 45%; background: #f0a17f; }
-.runner-torso { z-index: 5; top: 30%; left: 42%; width: 35%; height: 35%; border: 0.12rem solid #52365c; border-radius: 48% 34% 38% 46%; background: linear-gradient(135deg, #64d9d0, #328fa7); box-shadow: inset 0.16rem 0.12rem #c0fff34d, 0 0.13rem #3d365e; transform: rotate(14deg); }
-.runner-scarf { z-index: 4; top: 43%; left: 16%; width: 42%; height: 13%; border-radius: 50% 10% 60% 10%; background: linear-gradient(90deg, #ffbd55, #ff8b6c); clip-path: polygon(0 5%, 100% 5%, 64% 55%, 34% 100%); transform: rotate(-17deg); }
-.runner-arm { z-index: 6; width: 34%; height: 9%; border: 0.09rem solid #633f58; border-radius: 999px; background: linear-gradient(90deg, #ffc49c, #ff9d82); }
-.runner-arm b { position: absolute; right: -10%; top: -18%; width: 38%; height: 135%; border-radius: 50%; background: #ffd0a7; }
-.arm-back { top: 39%; left: 30%; transform: rotate(33deg); }
-.arm-front { top: 32%; left: 63%; transform: rotate(-27deg); }
-.runner-leg { z-index: 4; top: 59%; width: 12%; height: 32%; border: 0.1rem solid #3d3156; border-radius: 999px; background: linear-gradient(180deg, #4f4777, #35304e); }
-.runner-leg b { position: absolute; bottom: -7%; width: 165%; height: 25%; border: 0.08rem solid #5b365b; border-radius: 65% 60% 35% 30%; background: #ff8e72; }
-.leg-back { left: 34%; transform: rotate(35deg); }
-.leg-back b { left: -30%; }
-.leg-front { left: 56%; transform: rotate(-20deg); }
-.leg-front b { right: -25%; }
+.player-image { position: absolute; z-index: 2; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; transform: translateY(8%); }
 .hero-trail { position: absolute; z-index: 1; top: 43%; right: 69%; width: 40%; height: 0.3rem; border-radius: 1rem; background: linear-gradient(90deg, transparent, #fff0b5, #ffb378); opacity: 0.76; transform: skewX(-30deg); }
 .hero-trail::before, .hero-trail::after { content: ""; position: absolute; right: 12%; height: 0.13rem; border-radius: 1rem; background: #fff1c9; }
 .hero-trail::before { top: -0.45rem; width: 67%; }
