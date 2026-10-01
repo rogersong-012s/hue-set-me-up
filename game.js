@@ -286,7 +286,7 @@ const SHARE_IMAGE_FILENAME = 'hue-set-me-up-result.png';
 const SHARE_TITLE = '我被色記了｜Hue set me up!';
 const SHARE_CONFIG = {
   SHARE_TEXT_ENABLED: true,
-  SHARE_IMAGE_ENABLED: true,
+  SHARE_IMAGE_ENABLED: false,
   // Update this once the public game URL is finalized.
   SHARE_URL: 'https://rogersong-012s.github.io/hue-set-me-up/',
 };
