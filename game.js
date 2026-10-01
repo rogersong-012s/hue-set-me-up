@@ -1315,26 +1315,25 @@ function buildShareText(result) {
   return `我在《我被色記了》撐了 ${result.survivalTime}！\n最高 Combo：${result.bestCombo}\n\n你能撐多久？`;
 }
 
-function buildTextSharePayload(result) {
-  if (!SHARE_CONFIG.SHARE_TEXT_ENABLED) return {};
-  return {
-    title: SHARE_TITLE,
-    text: buildShareText(result),
-    url: SHARE_CONFIG.SHARE_URL,
-  };
-}
-
 function buildShareData(result, file = null) {
-  const shareData = {};
-  if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
-    Object.assign(shareData, buildTextSharePayload(result));
-  } else if (SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
-    shareData.title = SHARE_TITLE;
-  }
-  if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && typeof File === 'function' && file instanceof File) {
-    shareData.files = [file];
-  }
-  return shareData;
+  const canIncludeFile =
+    SHARE_CONFIG.SHARE_IMAGE_ENABLED &&
+    typeof File === 'function' &&
+    file instanceof File;
+  const includeText = SHARE_CONFIG.SHARE_TEXT_ENABLED;
+  const data = {
+    ...(canIncludeFile ? { files: [file] } : {}),
+    ...(includeText
+      ? {
+          title: SHARE_TITLE,
+          text: buildShareText(result),
+          url: SHARE_CONFIG.SHARE_URL,
+        }
+      : SHARE_CONFIG.SHARE_IMAGE_ENABLED
+        ? { title: SHARE_TITLE }
+        : {}),
+  };
+  return data;
 }
 
 function buildShareClipboardText(result) {
@@ -1399,7 +1398,7 @@ async function handleShareClick() {
     const hasNativeShare = typeof navigator.share === 'function';
 
     if (isMobile && hasNativeShare) {
-      const textPayload = buildTextSharePayload(gameOverResultSnapshot);
+      const textPayload = buildShareData(gameOverResultSnapshot);
       if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && shareImageReady && preparedShareFile) {
         const file = preparedShareFile;
         const canFiles = checkCanShare({ files: [file] }, 'files');
