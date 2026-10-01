@@ -283,14 +283,19 @@ const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutoria
 const SHARE_IMAGE_WIDTH = 1080;
 const SHARE_IMAGE_HEIGHT = 1350;
 const SHARE_IMAGE_FILENAME = 'hue-set-me-up-result.png';
+const SHARE_TITLE = '我被色記了｜Hue set me up!';
 const SHARE_CONFIG = {
   SHARE_TEXT_ENABLED: true,
-  SHARE_IMAGE_ENABLED: false,
+  SHARE_IMAGE_ENABLED: true,
   // Update this once the public game URL is finalized.
   SHARE_URL: 'https://rogersong-012s.github.io/hue-set-me-up/',
 };
 let shareInProgress = false;
 let gameOverResultSnapshot = null;
+let preparedShareFile = null;
+let preparedShareBlob = null;
+let shareImagePreparing = false;
+let shareImageReady = false;
 
 function shuffle(items) {
   const shuffled = [...items];
@@ -955,6 +960,7 @@ function endGame() {
   state.phase = 'gameOver';
   stopBgm();
   clearTimers();
+  resetPreparedShare();
   state.monsterStunRemaining = 0;
   state.monsterStunPending = false;
   gameShell.classList.remove('is-running', 'is-monster-stunned', 'is-previewing', 'is-qcc-transitioning');
@@ -972,10 +978,12 @@ function endGame() {
   $('#finalTime').textContent = gameOverResultSnapshot.survivalTime;
   $('#finalCombo').textContent = gameOverResultSnapshot.bestCombo;
   shareStatus.textContent = '';
-  shareButton.disabled = shareInProgress || !isShareEnabled();
-  shareButton.textContent = shareInProgress ? '分享中…' : getShareButtonLabel();
   gameOverOverlay.hidden = false;
+  updateShareButtonState();
   $('#restartButton').focus({ preventScroll: true });
+  if (SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
+    void prepareShareImage(gameOverResultSnapshot, state.runToken);
+  }
 }
 
 function drawShareRoundRect(context, x, y, width, height, radius, fill, stroke = null) {
@@ -1132,36 +1140,54 @@ function drawShareCard(context, result) {
   drawShareSparkle(context, 801, 1142, 10, '#ffad66');
 }
 
-function canvasToPngBlob(canvas) {
+function createSharePngBlob(canvas) {
   return new Promise((resolve, reject) => {
-    if (typeof canvas.toBlob === 'function') {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error('PNG export returned no image data.'));
-      }, 'image/png');
+    if (typeof canvas.toBlob !== 'function') {
+      reject(new Error('Canvas.toBlob is unavailable.'));
       return;
     }
 
-    try {
-      const encoded = canvas.toDataURL('image/png').split(',')[1];
-      const binary = atob(encoded);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-      resolve(new Blob([bytes], { type: 'image/png' }));
-    } catch (error) {
-      reject(error);
-    }
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Canvas PNG export returned no Blob.'));
+        return;
+      }
+      if (blob.type !== 'image/png') {
+        reject(new Error(`Canvas returned unexpected image type: ${blob.type || '(empty)'}`));
+        return;
+      }
+      resolve(blob);
+    }, 'image/png');
   });
 }
 
-async function generateShareImage(result) {
+async function generateShareImageBlob(result) {
+  if (document.fonts?.ready) await document.fonts.ready;
   const canvas = document.createElement('canvas');
   canvas.width = SHARE_IMAGE_WIDTH;
   canvas.height = SHARE_IMAGE_HEIGHT;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas 2D context is unavailable.');
   drawShareCard(context, result);
-  return canvasToPngBlob(canvas);
+  return createSharePngBlob(canvas);
+}
+
+function createShareFile(blob) {
+  if (!(blob instanceof Blob) || blob.type !== 'image/png') {
+    throw new Error('Share image must be an image/png Blob.');
+  }
+  if (typeof File !== 'function') {
+    throw new Error('The File constructor is unavailable.');
+  }
+
+  const file = new File([blob], SHARE_IMAGE_FILENAME, {
+    type: 'image/png',
+    lastModified: Date.now(),
+  });
+  if (!(file instanceof File) || file.type !== 'image/png') {
+    throw new Error('Could not create a valid PNG File for sharing.');
+  }
+  return file;
 }
 
 function downloadShareImage(blob) {
@@ -1179,6 +1205,70 @@ function downloadShareImage(blob) {
 function setShareStatus(message, runToken) {
   if (state.phase === 'gameOver' && state.runToken === runToken) {
     shareStatus.textContent = message;
+  }
+}
+
+function resetPreparedShare() {
+  preparedShareFile = null;
+  preparedShareBlob = null;
+  shareImagePreparing = false;
+  shareImageReady = false;
+}
+
+function updateShareButtonState() {
+  const shareEnabled = isShareEnabled();
+  shareButton.hidden = !shareEnabled;
+  shareButton.disabled = !shareEnabled
+    || state.phase !== 'gameOver'
+    || shareInProgress
+    || (SHARE_CONFIG.SHARE_IMAGE_ENABLED && shareImagePreparing);
+  shareButton.textContent = shareInProgress
+    ? '分享中…'
+    : shareImagePreparing
+      ? '準備分享…'
+      : getShareButtonLabel();
+}
+
+async function prepareShareImage(result, runToken) {
+  if (!SHARE_CONFIG.SHARE_IMAGE_ENABLED || !result) return;
+  preparedShareFile = null;
+  preparedShareBlob = null;
+  shareImagePreparing = true;
+  shareImageReady = false;
+  updateShareButtonState();
+  setShareStatus('正在準備分享圖片…', runToken);
+
+  try {
+    const blob = await generateShareImageBlob(result);
+    if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+    preparedShareBlob = blob;
+    console.info('[Share] PNG blob ready', { type: blob.type, size: blob.size });
+
+    const file = createShareFile(blob);
+    if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+    preparedShareFile = file;
+    shareImageReady = true;
+    console.info('[Share] File ready', {
+      isFile: file instanceof File,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    });
+    setShareStatus('', runToken);
+  } catch (error) {
+    if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+    console.error('[Share] image preparation failed', error);
+    setShareStatus(
+      SHARE_CONFIG.SHARE_TEXT_ENABLED
+        ? '圖片準備失敗，仍可分享文字與網址'
+        : '分享圖片準備失敗',
+      runToken,
+    );
+  } finally {
+    if (state.runToken === runToken && state.phase === 'gameOver') {
+      shareImagePreparing = false;
+      updateShareButtonState();
+    }
   }
 }
 
@@ -1206,11 +1296,17 @@ function isShareEnabled() {
   return SHARE_CONFIG.SHARE_TEXT_ENABLED || SHARE_CONFIG.SHARE_IMAGE_ENABLED;
 }
 
-function canShareFiles(file) {
-  if (!file || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+function checkCanShare(shareData, payloadName) {
+  if (typeof navigator.canShare !== 'function') {
+    console.info(`[Share] navigator.canShare unavailable for ${payloadName}`);
+    return null;
+  }
   try {
-    return navigator.canShare({ files: [file] });
-  } catch {
+    const canShare = navigator.canShare(shareData);
+    console.info(`[Share] canShare ${payloadName}:`, canShare);
+    return canShare;
+  } catch (error) {
+    console.info(`[Share] canShare ${payloadName} threw`, error);
     return false;
   }
 }
@@ -1222,9 +1318,23 @@ function buildShareText(result) {
 function buildTextSharePayload(result) {
   if (!SHARE_CONFIG.SHARE_TEXT_ENABLED) return {};
   return {
-    title: '我被色記了｜Hue set me up!',
-    text: buildShareClipboardText(result),
+    title: SHARE_TITLE,
+    text: buildShareText(result),
+    url: SHARE_CONFIG.SHARE_URL,
   };
+}
+
+function buildShareData(result, file = null) {
+  const shareData = {};
+  if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
+    Object.assign(shareData, buildTextSharePayload(result));
+  } else if (SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
+    shareData.title = SHARE_TITLE;
+  }
+  if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && typeof File === 'function' && file instanceof File) {
+    shareData.files = [file];
+  }
+  return shareData;
 }
 
 function buildShareClipboardText(result) {
@@ -1243,100 +1353,119 @@ function writeShareTextToClipboard(text) {
   }
 }
 
-async function shareResultImage() {
+async function callNativeShare(shareData, runToken, payloadName) {
+  console.info('[Share] invoking navigator.share', payloadName);
+  try {
+    await navigator.share(shareData);
+    console.info('[Share] success', payloadName);
+    setShareStatus('分享完成', runToken);
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      console.info('[Share] cancelled');
+      setShareStatus('', runToken);
+      return;
+    }
+    console.error('[Share] navigator.share failed', error);
+    setShareStatus('分享未完成，請再試一次', runToken);
+  }
+}
+
+function logShareDiagnostics(file, canShareFiles, canShareFullPayload) {
+  console.info('[Share] diagnostics', {
+    browser: navigator.userAgent,
+    fileType: file?.type ?? null,
+    fileSize: file?.size ?? null,
+    canShareFiles,
+    canShareFullPayload,
+  });
+}
+
+async function handleShareClick() {
   if (state.phase !== 'gameOver' || shareInProgress || !gameOverResultSnapshot) return;
   if (!isShareEnabled()) {
-    shareButton.disabled = true;
+    updateShareButtonState();
     setShareStatus('分享功能目前已停用', state.runToken);
     return;
   }
+  if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && shareImagePreparing) return;
 
   shareInProgress = true;
   const runToken = state.runToken;
-  shareButton.disabled = true;
-  shareButton.textContent = SHARE_CONFIG.SHARE_IMAGE_ENABLED ? '準備圖片…' : '分享中…';
-  shareStatus.textContent = SHARE_CONFIG.SHARE_IMAGE_ENABLED ? '正在準備分享圖…' : '';
+  updateShareButtonState();
+  shareStatus.textContent = '';
 
   try {
     const isMobile = isMobileShareClient();
-    const textPayload = buildTextSharePayload(gameOverResultSnapshot);
-    const clipboardText = SHARE_CONFIG.SHARE_TEXT_ENABLED
-      ? buildShareClipboardText(gameOverResultSnapshot)
-      : '';
+    const hasNativeShare = typeof navigator.share === 'function';
 
-    if (!SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
-      if (isMobile && typeof navigator.share === 'function') {
-        try {
-          await navigator.share(textPayload);
-          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-          setShareStatus('分享選單已開啟', runToken);
-        } catch (error) {
-          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-          if (error?.name === 'AbortError') {
-            setShareStatus('已取消分享', runToken);
-          } else {
-            const copied = await writeShareTextToClipboard(clipboardText);
-            if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-            setShareStatus(copied ? '分享文字與網址已複製' : '分享失敗，剪貼簿也無法使用', runToken);
-          }
+    if (isMobile && hasNativeShare) {
+      const textPayload = buildTextSharePayload(gameOverResultSnapshot);
+      if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && shareImageReady && preparedShareFile) {
+        const file = preparedShareFile;
+        const canFiles = checkCanShare({ files: [file] }, 'files');
+        const fullShareData = buildShareData(gameOverResultSnapshot, file);
+        const canFullPayload = checkCanShare(fullShareData, 'full payload');
+
+        if (canFiles === true && canFullPayload === true) {
+          await callNativeShare(fullShareData, runToken, 'title + text + url + PNG');
+          return;
+        }
+
+        logShareDiagnostics(file, canFiles, canFullPayload);
+        if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
+          setShareStatus('目前瀏覽器不支援圖片分享，改分享文字與網址', runToken);
+          await callNativeShare(textPayload, runToken, 'text + URL fallback');
+          return;
+        }
+
+        if (preparedShareBlob) {
+          downloadShareImage(preparedShareBlob);
+          setShareStatus('目前瀏覽器不支援圖片分享，已下載 PNG', runToken);
+        } else {
+          setShareStatus('目前瀏覽器不支援圖片分享', runToken);
         }
         return;
       }
 
-      const copied = await writeShareTextToClipboard(clipboardText);
-      if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-      setShareStatus(copied ? '分享文字與網址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限', runToken);
+      if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
+        if (SHARE_CONFIG.SHARE_IMAGE_ENABLED) {
+          console.info('[Share] prepared image File unavailable; using text + URL payload');
+        }
+        await callNativeShare(textPayload, runToken, 'text + URL');
+        return;
+      }
+
+      if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && preparedShareBlob) {
+        downloadShareImage(preparedShareBlob);
+        setShareStatus('圖片無法透過 Share API 傳送，已下載 PNG', runToken);
+      } else {
+        setShareStatus('分享圖片無法使用', runToken);
+      }
       return;
     }
 
-    const resultBlob = await generateShareImage(gameOverResultSnapshot);
-    if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-    const resultFile = typeof File === 'function'
-      ? new File([resultBlob], SHARE_IMAGE_FILENAME, { type: 'image/png' })
-      : null;
-    const canShareImage = isMobile && canShareFiles(resultFile);
-
-    if (canShareImage) {
-      const sharePayload = {
-        ...textPayload,
-        files: [resultFile],
-      };
-      try {
-        await navigator.share(sharePayload);
-        if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-        setShareStatus('分享選單已開啟', runToken);
-      } catch (error) {
-        if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-        if (error?.name === 'AbortError') {
-          setShareStatus('已取消分享', runToken);
-        } else {
-          downloadShareImage(resultBlob);
-          const copied = SHARE_CONFIG.SHARE_TEXT_ENABLED
-            ? await writeShareTextToClipboard(clipboardText)
-            : false;
-          if (state.runToken !== runToken || state.phase !== 'gameOver') return;
-          setShareStatus(copied ? '已下載 PNG；分享文字與網址已複製' : '分享未完成，已下載 PNG', runToken);
-        }
-      }
-    } else {
-      downloadShareImage(resultBlob);
-      if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
-        const copied = await writeShareTextToClipboard(clipboardText);
-        if (state.runToken !== runToken || state.phase !== 'gameOver') return;
+    // Preserve the existing desktop / no-Web-Share experience: download the image and copy text.
+    if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && preparedShareBlob) {
+      downloadShareImage(preparedShareBlob);
+    }
+    if (SHARE_CONFIG.SHARE_TEXT_ENABLED) {
+      const copied = await writeShareTextToClipboard(buildShareClipboardText(gameOverResultSnapshot));
+      if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && preparedShareBlob) {
         setShareStatus(copied ? '已下載分享圖；分享文字與網址已複製' : '已下載分享圖，分享文字複製失敗', runToken);
       } else {
-        setShareStatus('已下載分享圖', runToken);
+        setShareStatus(copied ? '分享文字與網址已複製' : '複製失敗，請確認瀏覽器剪貼簿權限', runToken);
       }
+    } else if (SHARE_CONFIG.SHARE_IMAGE_ENABLED && preparedShareBlob) {
+      setShareStatus('已下載分享圖', runToken);
+    } else {
+      setShareStatus('分享圖片無法使用', runToken);
     }
   } catch {
-    setShareStatus(SHARE_CONFIG.SHARE_IMAGE_ENABLED
-      ? '分享圖處理失敗，請再試一次'
-      : '分享處理失敗，請再試一次', runToken);
+    setShareStatus('分享處理失敗，請再試一次', runToken);
   } finally {
     if (state.runToken === runToken) {
       shareInProgress = false;
-      shareButton.disabled = state.phase !== 'gameOver' || !isShareEnabled();
-      shareButton.textContent = getShareButtonLabel();
+      updateShareButtonState();
     }
   }
 }
@@ -1366,6 +1495,7 @@ function clearTimers() {
 function restartGame() {
   clearTimers();
   stopBgm();
+  resetPreparedShare();
   Object.assign(state, {
     phase: 'idle',
     deckIndex: 0,
@@ -1410,8 +1540,7 @@ function restartGame() {
   gameShell.style.removeProperty('--run-cycle');
   gameOverResultSnapshot = null;
   shareInProgress = false;
-  shareButton.disabled = !isShareEnabled();
-  shareButton.textContent = getShareButtonLabel();
+  updateShareButtonState();
   shareStatus.textContent = '';
   gameOverOverlay.hidden = true;
   startPanel.hidden = false;
@@ -1476,7 +1605,7 @@ cardGrid.addEventListener('click', (event) => {
 
 startButton.addEventListener('click', beginGame);
 $('#restartButton').addEventListener('click', restartGame);
-shareButton.addEventListener('click', shareResultImage);
+shareButton.addEventListener('click', handleShareClick);
 qccButton.addEventListener('click', useQcc);
 document.addEventListener('keydown', (event) => {
   if (state.phase !== 'qccTutorial') return;
