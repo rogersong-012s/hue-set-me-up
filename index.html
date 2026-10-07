@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#19172e">
     <title>我被色記了｜Hue set me up!</title>
     <link rel="stylesheet" href="style.css">
+    <script src="js/background/bottleBuildings.js" defer></script>
+    <script src="js/background/roadMarkers.js" defer></script>
     <script src="game.js" defer></script>
   </head>
   <body>
@@ -44,14 +46,11 @@
             </div>
 
             <div class="track" aria-hidden="true">
-              <div class="mountain mountain-back"></div>
-              <div class="mountain mountain-front"></div>
-              <div class="far-hill hill-one"></div>
-              <div class="far-hill hill-two"></div>
+              <div class="bottle-city-layer" data-bottle-building-layer aria-hidden="true"></div>
               <div class="ground ground-back"></div>
               <div class="ground ground-front"></div>
               <div class="road-rumble"></div>
-              <div class="lane-dashes"></div>
+              <div class="lane-dashes" data-road-marker-layer aria-hidden="true"></div>
               <div class="character monster" id="monster" role="img" aria-label="追趕中的怪物">
                 <span class="character-shadow"></span>
                 <img class="monster-image" src="assets/monster/monster.png" alt="" aria-hidden="true">
