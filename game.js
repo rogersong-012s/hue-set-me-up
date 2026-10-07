@@ -8,12 +8,12 @@ const CONFIG = {
   BGM_DANGER_DISTANCE_PLAYBACK_RATE: 1.3,
   PLAYER_BASE_SPEED: 100,
   // The final monster effective speed is capped after growth and all slow effects are applied.
-  MONSTER_BASE_OFFSET_X: 3,
-  MONSTER_SPEED_GROWTH_Y: 0.35,
+  MONSTER_BASE_OFFSET_X: 4,
+  MONSTER_SPEED_GROWTH_Y: 0.45,
   MONSTER_SPEED_GROWTH_INTERVAL_SECONDS: 1,
   // Every 10 seconds of active card play, future monster growth steps get larger.
   MONSTER_GROWTH_SCALE_INTERVAL: 10,
-  MONSTER_SPEED_GROWTH_Y_STEP: 0.02,
+  MONSTER_SPEED_GROWTH_Y_STEP: 0.01,
   MONSTER_SPEED_CAP: 120, // Final effective speed cap, not a base-speed cap.
   COMBO_MONSTER_SLOW_UNIT: 0.05,
   // Permanent slow for a matched pair; dangerous-distance matches apply the configured multiplier.
