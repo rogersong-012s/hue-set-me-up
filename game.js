@@ -288,6 +288,7 @@ const qccRewardLayer = $('#qccRewardLayer');
 const qccTutorialOverlay = $('#qccTutorialOverlay');
 const qccTutorialArrow = $('#qccTutorialArrow');
 const qccTutorialCopy = $('#qccTutorialCopy');
+const qccTutorialSkipButton = $('#qccTutorialSkipButton');
 const qccTutorialArrowPath = $('#qccTutorialArrowPath');
 const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutorial-shield')];
 
@@ -704,23 +705,28 @@ function positionQccTutorial() {
   });
 
   const buttonX = targetRect.left - overlayRect.left + targetRect.width / 2;
-  const buttonTop = targetRect.top - overlayRect.top;
   const buttonBottom = targetRect.bottom - overlayRect.top;
   const copyWidth = qccTutorialCopy.getBoundingClientRect().width;
   const copyHeight = qccTutorialCopy.getBoundingClientRect().height;
-  const copyLeft = Math.max(12, Math.min(width - copyWidth - 12, buttonX - copyWidth / 2));
-  const roomAbove = buttonTop - copyHeight - 50;
-  const roomBelow = height - buttonBottom - copyHeight - 50;
-  const copyAbove = roomAbove >= 12 || roomAbove >= roomBelow;
-  const copyTop = copyAbove
-    ? Math.max(12, buttonTop - copyHeight - 50)
-    : Math.min(height - copyHeight - 12, buttonBottom + 50);
+  const edgePadding = 12;
+  const copyLeft = Math.max(edgePadding, Math.min(width - copyWidth - edgePadding, buttonX - copyWidth / 2));
+  const copyTop = buttonBottom + 28;
+  const availableCopyHeight = height - copyTop - edgePadding;
+  if (copyHeight > availableCopyHeight) {
+    qccTutorialCopy.style.maxHeight = `${Math.max(0, availableCopyHeight)}px`;
+    qccTutorialCopy.style.overflowY = 'auto';
+  } else {
+    qccTutorialCopy.style.removeProperty('max-height');
+    qccTutorialCopy.style.removeProperty('overflow-y');
+  }
   qccTutorialCopy.style.left = `${copyLeft}px`;
   qccTutorialCopy.style.top = `${copyTop}px`;
 
   const startX = Math.max(copyLeft + 36, Math.min(copyLeft + copyWidth - 36, buttonX));
-  const startY = copyAbove ? copyTop + copyHeight + 3 : copyTop - 3;
-  const endY = copyAbove ? buttonTop - 4 : buttonBottom + 4;
+  // The tooltip is below QCC, so the arrow starts at its top edge and ends
+  // inside the button's highlighted cutout, pointing upward toward the skill.
+  const startY = copyTop - 3;
+  const endY = buttonBottom + 4;
   const bendY = (startY + endY) / 2;
   qccTutorialArrowPath.setAttribute('d', `M ${startX} ${startY} C ${startX} ${bendY}, ${buttonX} ${bendY}, ${buttonX} ${endY}`);
   qccTutorialArrow.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -730,6 +736,22 @@ function hideQccTutorial() {
   qccTutorialOverlay.hidden = true;
   gameShell.classList.remove('is-qcc-tutorial');
   qccButton.removeAttribute('aria-describedby');
+}
+
+function skipQccTutorial() {
+  if (state.phase !== 'qccTutorial' || qccTutorialOverlay.hidden) return;
+
+  state.qccTutorialShown = true;
+  hideQccTutorial();
+  state.phase = 'playing';
+  syncCardState();
+  updateQccUI();
+  $('#sceneMessage').textContent = '連續配對會拖慢怪物，完成牌組還能讓牠暈眩！';
+  $('#memoryHint').textContent = '一次翻開兩張；連續配對會持續拖慢追兵。';
+  $('#boardFooterText').textContent = '連續配對會持續拖慢追兵；清盤後怪物暈眩 0.5 秒。';
+  $('#chaseTip').textContent = '連續配對會持續拖慢追兵 · 配錯會中斷 Combo';
+  const nextCard = cardGrid.querySelector('.memory-card:not(:disabled)');
+  if (nextCard) nextCard.focus({ preventScroll: true });
 }
 
 function maybeShowQccTutorial() {
@@ -1839,11 +1861,18 @@ startButton.addEventListener('click', beginGame);
 $('#restartButton').addEventListener('click', restartGame);
 shareButton.addEventListener('click', handleShareClick);
 qccButton.addEventListener('click', useQcc);
+qccTutorialSkipButton.addEventListener('click', skipQccTutorial);
 document.addEventListener('keydown', (event) => {
   if (state.phase !== 'qccTutorial') return;
   if (event.key === 'Tab') {
     event.preventDefault();
-    qccButton.focus({ preventScroll: true });
+    const tutorialControls = [qccButton, qccTutorialSkipButton];
+    const activeIndex = tutorialControls.indexOf(document.activeElement);
+    const step = event.shiftKey ? -1 : 1;
+    const nextIndex = activeIndex < 0
+      ? (event.shiftKey ? tutorialControls.length - 1 : 0)
+      : (activeIndex + step + tutorialControls.length) % tutorialControls.length;
+    tutorialControls[nextIndex].focus({ preventScroll: true });
   } else if (event.key === 'Escape') {
     event.preventDefault();
   }
