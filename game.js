@@ -47,6 +47,7 @@ const CONFIG = {
   QCC_RECHARGE_CARD_IMAGE: 'assets/card/qcc-bottle.png',
   QCC_RECHARGE_DEBUG: true, // Temporary state-change / 10-second milestone diagnostics.
   QCC_TRANSITION_DURATION_MS: 500,
+  QCC_REWARD_FLIGHT_DURATION_MS: 680,
 
   // The one-time warning plays after this many completed decks, before the next preview.
   DANGER_TRANSITION_TRIGGER_DECK: 3,
@@ -279,14 +280,74 @@ const track = $('.track');
 const comboReadout = $('#comboReadout');
 const feedback = $('#feedback');
 const qccButton = $('#qccButton');
+const qccButtonIcon = qccButton.querySelector('.qcc-icon');
 const qccCount = $('#qccCount');
 const qccLock = $('#qccLock');
 const qccFlash = $('#qccFlash');
+const qccRewardLayer = $('#qccRewardLayer');
 const qccTutorialOverlay = $('#qccTutorialOverlay');
 const qccTutorialArrow = $('#qccTutorialArrow');
 const qccTutorialCopy = $('#qccTutorialCopy');
 const qccTutorialArrowPath = $('#qccTutorialArrowPath');
 const qccTutorialShields = [...qccTutorialOverlay.querySelectorAll('.qcc-tutorial-shield')];
+
+const qccAssets = {
+  rechargeCard: null,
+  buttonIcon: null,
+  ready: false,
+  readyPromise: null,
+};
+
+function preloadImage(image, source = null) {
+  image.decoding = 'async';
+  const sourceNeedsSetting = source && image.getAttribute('src') !== source;
+  const loaded = new Promise((resolve, reject) => {
+    if (!sourceNeedsSetting && image.complete) {
+      if (image.naturalWidth > 0) resolve(image);
+      else reject(new Error(`Image failed to load: ${image.currentSrc || image.src}`));
+      return;
+    }
+
+    image.addEventListener('load', () => resolve(image), { once: true });
+    image.addEventListener('error', () => reject(new Error(`Image failed to load: ${source || image.src}`)), { once: true });
+    if (sourceNeedsSetting) image.src = source;
+  });
+
+  return loaded.then(async (loadedImage) => {
+    if (typeof loadedImage.decode === 'function') {
+      try {
+        await loadedImage.decode();
+      } catch (error) {
+        if (loadedImage.naturalWidth === 0) throw error;
+      }
+    }
+    return loadedImage;
+  });
+}
+
+function preloadQccAssets() {
+  const rechargeCard = new Image();
+  const iconSource = qccButtonIcon?.getAttribute('src');
+  const preloadTasks = [preloadImage(rechargeCard, CONFIG.QCC_RECHARGE_CARD_IMAGE)];
+  if (qccButtonIcon) preloadTasks.push(preloadImage(qccButtonIcon, iconSource));
+
+  qccAssets.readyPromise = Promise.all(preloadTasks)
+    .then(([cardImage, buttonIcon]) => {
+      qccAssets.rechargeCard = cardImage;
+      qccAssets.buttonIcon = buttonIcon || qccButtonIcon;
+      qccAssets.ready = true;
+      return true;
+    })
+    .catch(() => {
+      // Gameplay remains available if an optional art asset cannot be decoded;
+      // card rendering falls back to its configured relative URL.
+      qccAssets.ready = false;
+      return false;
+    });
+  return qccAssets.readyPromise;
+}
+
+void preloadQccAssets();
 
 const SHARE_IMAGE_WIDTH = 1080;
 const SHARE_IMAGE_HEIGHT = 1350;
@@ -404,7 +465,7 @@ function renderDeck() {
       front.classList.add('card-front--qcc-recharge');
       const image = document.createElement('img');
       image.className = 'qcc-recharge-card-image';
-      image.src = card.image;
+      image.src = qccAssets.rechargeCard?.currentSrc || qccAssets.rechargeCard?.src || card.image;
       image.alt = '';
       image.setAttribute('aria-hidden', 'true');
       image.draggable = false;
@@ -475,7 +536,7 @@ function resolveTurn() {
     state.matchedPairs += 1;
     state.matchedPairCount += 1;
     onSuccessfulMatch();
-    if (isQccRechargeMatch) rewardQccRechargePair(first.card.pairId);
+    if (isQccRechargeMatch) rewardQccRechargePair(first.card.pairId, [first.button, second.button]);
     updateMatchUI();
 
     if (state.matchedPairs === CONFIG.CARD_PAIRS) completeDeck();
@@ -522,14 +583,70 @@ function onSuccessfulMatch() {
   showFeedback(message, state.combo >= 3 ? 'big' : 'good');
 }
 
-function rewardQccRechargePair(pairId) {
+function rewardQccRechargePair(pairId, pairButtons) {
   if (!state.currentBoardHasQccPair
     || state.qccRechargeState !== 'boardActive'
     || state.currentBoardQccPairId !== pairId
     || state.qccPairMatched) return;
   state.qccPairMatched = true;
+  const previousCount = state.qccCount;
   state.qccCount = Math.min(CONFIG.QCC_MAX_COUNT, state.qccCount + 1);
   updateQccUI();
+  if (state.qccCount > previousCount) animateQccReward(pairButtons);
+}
+
+function playQccButtonRewardFeedback() {
+  if (!qccButtonIcon) return;
+  qccButtonIcon.classList.remove('is-rewarded');
+  void qccButtonIcon.offsetWidth;
+  qccButtonIcon.classList.add('is-rewarded');
+}
+
+function clearQccRewardAnimations() {
+  qccRewardLayer?.replaceChildren();
+  qccButtonIcon?.classList.remove('is-rewarded');
+}
+
+function animateQccReward(pairButtons) {
+  if (!pairButtons?.length || !qccRewardLayer) {
+    playQccButtonRewardFeedback();
+    return;
+  }
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    playQccButtonRewardFeedback();
+    return;
+  }
+
+  const sourceButton = pairButtons[Math.floor(Math.random() * pairButtons.length)];
+  const sourceRect = sourceButton.getBoundingClientRect();
+  const targetRect = (qccButtonIcon || qccButton).getBoundingClientRect();
+  const layerRect = qccRewardLayer.getBoundingClientRect();
+  if (!sourceRect.width || !sourceRect.height || !targetRect.width || !targetRect.height) {
+    playQccButtonRewardFeedback();
+    return;
+  }
+
+  const startX = sourceRect.left + sourceRect.width / 2 - layerRect.left;
+  const startY = sourceRect.top + sourceRect.height / 2 - layerRect.top;
+  const endX = targetRect.left + targetRect.width / 2 - layerRect.left;
+  const endY = targetRect.top + targetRect.height / 2 - layerRect.top;
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const particle = document.createElement('span');
+  particle.className = 'qcc-reward-particle';
+  particle.setAttribute('aria-hidden', 'true');
+  particle.style.left = `${startX}px`;
+  particle.style.top = `${startY}px`;
+  particle.style.setProperty('--qcc-mid-x', `${(deltaX / 2).toFixed(1)}px`);
+  particle.style.setProperty('--qcc-mid-y', `${(deltaY / 2 - 24).toFixed(1)}px`);
+  particle.style.setProperty('--qcc-end-x', `${deltaX.toFixed(1)}px`);
+  particle.style.setProperty('--qcc-end-y', `${deltaY.toFixed(1)}px`);
+  particle.style.animationDuration = `${CONFIG.QCC_REWARD_FLIGHT_DURATION_MS}ms`;
+  particle.addEventListener('animationend', () => {
+    particle.remove();
+    playQccButtonRewardFeedback();
+  }, { once: true });
+  qccRewardLayer.append(particle);
 }
 
 function updateComboUI(pop) {
@@ -1602,6 +1719,7 @@ function clearTimers() {
 
 function restartGame() {
   clearTimers();
+  clearQccRewardAnimations();
   stopBgm();
   resetPreparedShare();
   Object.assign(state, {

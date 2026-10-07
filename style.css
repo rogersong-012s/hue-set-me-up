@@ -189,6 +189,10 @@ button { font: inherit; }
 .qcc-button.is-locked:disabled { border-color: #9a91aa; color: #c2bbcc; background: linear-gradient(145deg, #6c687e, #4b485f); box-shadow: 0 0.18rem 0 #353248, inset 0 1px #ffffff21; }
 .qcc-button:disabled:not(.is-locked) { opacity: 0.52; filter: saturate(0.55); }
 .qcc-icon { display: block; flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; object-fit: contain; }
+.qcc-icon.is-rewarded { animation: qcc-icon-reward-pop 440ms cubic-bezier(.18,.8,.3,1.2); }
+@keyframes qcc-icon-reward-pop {
+  42% { transform: scale(1.32); filter: brightness(1.3) drop-shadow(0 0 0.38rem #caff9b); }
+}
 .qcc-copy { display: grid; justify-items: start; gap: 0.02rem; line-height: 1; }
 .qcc-copy strong { font-size: 0.76rem; font-weight: 1000; letter-spacing: 0.04em; }
 .qcc-copy small { color: #ffe58a; font-size: 0.72rem; font-weight: 900; font-variant-numeric: tabular-nums; }
@@ -278,6 +282,38 @@ button { font: inherit; }
 @keyframes danger-tape-enter { to { transform: translate3d(0, -50%, 0); } }
 @keyframes danger-tape-exit { to { transform: translate3d(112%, -50%, 0); } }
 .game-over { z-index: 30; }
+
+.qcc-reward-layer { position: absolute; z-index: 25; inset: 0; overflow: hidden; pointer-events: none; }
+.qcc-reward-particle {
+  position: absolute;
+  z-index: 1;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid #f6fff0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 13%, #dcffb0 28%, #8be768 66%, #49b93e 100%);
+  box-shadow: 0 0 0.28rem #fff, 0 0 0.72rem #a8ff7b, 0 0 1.15rem #72dc59a6;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0) scale(0.45);
+  animation: qcc-reward-flight var(--qcc-flight-duration, 680ms) cubic-bezier(.22,.72,.26,1) both;
+  will-change: transform, opacity;
+}
+@keyframes qcc-reward-flight {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale(0.45); }
+  12% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1.12); }
+  54% {
+    opacity: 1;
+    transform: translate3d(calc(-50% + var(--qcc-mid-x)), calc(-50% + var(--qcc-mid-y)), 0) scale(1.08);
+  }
+  88% {
+    opacity: 1;
+    transform: translate3d(calc(-50% + var(--qcc-end-x)), calc(-50% + var(--qcc-end-y)), 0) scale(0.32);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(-50% + var(--qcc-end-x)), calc(-50% + var(--qcc-end-y)), 0) scale(0.32);
+  }
+}
 
 .game-shell.is-qcc-tutorial .chase-panel *,
 .game-shell.is-qcc-tutorial .memory-panel *,
