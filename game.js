@@ -8,13 +8,13 @@ const CONFIG = {
   BGM_DANGER_DISTANCE_PLAYBACK_RATE: 1.3,
   PLAYER_BASE_SPEED: 100,
   // The final monster effective speed is capped after growth and all slow effects are applied.
-  MONSTER_BASE_OFFSET_X: 2,
+  MONSTER_BASE_OFFSET_X: 4,
   MONSTER_SPEED_GROWTH_Y: 0.3,
   MONSTER_SPEED_GROWTH_INTERVAL_SECONDS: 1,
   // Every 10 seconds of active card play, future monster growth steps get larger.
   MONSTER_GROWTH_SCALE_INTERVAL: 10,
   MONSTER_SPEED_GROWTH_Y_STEP: 0.02,
-  MONSTER_SPEED_CAP: 135, // Final effective speed cap, not a base-speed cap.
+  MONSTER_SPEED_CAP: 120, // Final effective speed cap, not a base-speed cap.
   COMBO_MONSTER_SLOW_UNIT: 0.05,
   // Permanent slow for a matched pair; dangerous-distance matches apply the configured multiplier.
   MATCH_MONSTER_SLOW: 0.3,
@@ -43,7 +43,7 @@ const CONFIG = {
   QCC_MAX_COUNT: 2,
   QCC_UNLOCK_DECK: 4,
   // Active-play seconds after unlock before the next new deck becomes a QCC reward board.
-  QCC_BOARD_RECHARGE_INTERVAL: 50,
+  QCC_BOARD_RECHARGE_INTERVAL: 60,
   QCC_RECHARGE_CARD_IMAGE: 'assets/card/qcc-bottle.png',
   QCC_RECHARGE_DEBUG: true, // Temporary state-change / 10-second milestone diagnostics.
   QCC_TRANSITION_DURATION_MS: 500,
