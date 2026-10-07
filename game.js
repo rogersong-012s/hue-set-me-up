@@ -11,7 +11,7 @@ const CONFIG = {
   MONSTER_BASE_OFFSET_X: 2,
   MONSTER_SPEED_GROWTH_Y: 0.3,
   MONSTER_SPEED_GROWTH_INTERVAL_SECONDS: 1,
-  // Every 100 seconds of active card play, future monster growth steps get larger.
+  // Every 10 seconds of active card play, future monster growth steps get larger.
   MONSTER_GROWTH_SCALE_INTERVAL: 10,
   MONSTER_SPEED_GROWTH_Y_STEP: 0.02,
   MONSTER_SPEED_CAP: 135, // Final effective speed cap, not a base-speed cap.
@@ -42,8 +42,10 @@ const CONFIG = {
   QCC_INITIAL_COUNT: 1,
   QCC_MAX_COUNT: 2,
   QCC_UNLOCK_DECK: 4,
-  // Recharge follows fixed active-play time nodes, even while QCC is at capacity.
-  QCC_RECHARGE_INTERVAL: 100,
+  // Active-play seconds after unlock before the next new deck becomes a QCC reward board.
+  QCC_BOARD_RECHARGE_INTERVAL: 50,
+  QCC_RECHARGE_CARD_IMAGE: 'assets/card/qcc-bottle.png',
+  QCC_RECHARGE_DEBUG: true, // Temporary state-change / 10-second milestone diagnostics.
   QCC_TRANSITION_DURATION_MS: 500,
 
   // The one-time warning plays after this many completed decks, before the next preview.
@@ -205,9 +207,15 @@ const state = {
   phase: 'idle', // Normal: preview → playing → roundClear → preview; QCC tutorial pauses Playing.
   deckIndex: 0,
   elapsed: 0,
-  // Shared clock for time-based QCC recharge and growth-Y upgrades; advances only in playing.
+  // Shared gameplay clock for growth-Y upgrades; advances only in playing.
   activeGameplayTime: 0,
-  lastProcessedQccRechargeCount: 0,
+  qccRechargeElapsed: 0,
+  qccRechargeLastLoggedMilestone: 0,
+  qccRechargeState: 'locked', // locked → counting → pending → boardActive → counting.
+  currentBoardHasQccPair: false,
+  currentBoardQccPairId: null,
+  qccPairMatched: false,
+  qccRechargeRefreshPending: false,
   monsterGrowthStepsProcessed: 0,
   monsterGrowthTotal: 0,
   distance: Math.min(CONFIG.INITIAL_DISTANCE, CONFIG.MAX_DISTANCE),
@@ -344,7 +352,27 @@ function createDeck(options = {}) {
   state.currentPaletteTheme = palette.theme;
   state.currentSelectedColorIndices = palette.selectedColorIndices;
   state.currentPaletteVariant = palette.variant;
-  const deck = palette.entries.flatMap((entry, pairId) => [
+  const entries = palette.entries.map((entry) => ({ ...entry, pairType: 'color' }));
+  state.currentBoardHasQccPair = false;
+  state.currentBoardQccPairId = null;
+  state.qccPairMatched = false;
+
+  const shouldCreateQccRechargeBoard = state.qccRechargeState === 'pending'
+    && !options.skipQccRechargeBoard;
+  if (shouldCreateQccRechargeBoard && entries.length > 0) {
+    const qccPairId = Math.floor(Math.random() * entries.length);
+    entries[qccPairId] = {
+      ...entries[qccPairId],
+      pairType: 'qccRecharge',
+      image: CONFIG.QCC_RECHARGE_CARD_IMAGE,
+    };
+    state.qccRechargeState = 'boardActive';
+    state.currentBoardHasQccPair = true;
+    state.currentBoardQccPairId = qccPairId;
+    logQccRecharge(`board activated (pair ${qccPairId + 1})`);
+  }
+
+  const deck = entries.flatMap((entry, pairId) => [
     { id: `${state.deckIndex}-${pairId}-a`, pairId, ...entry },
     { id: `${state.deckIndex}-${pairId}-b`, pairId, ...entry },
   ]);
@@ -372,6 +400,16 @@ function renderDeck() {
     const front = document.createElement('span');
     front.className = 'card-face card-front';
     front.style.setProperty('--card-color', card.color);
+    if (card.pairType === 'qccRecharge') {
+      front.classList.add('card-front--qcc-recharge');
+      const image = document.createElement('img');
+      image.className = 'qcc-recharge-card-image';
+      image.src = card.image;
+      image.alt = '';
+      image.setAttribute('aria-hidden', 'true');
+      image.draggable = false;
+      front.append(image);
+    }
     front.setAttribute('aria-hidden', 'true');
     inner.append(back, front);
     button.append(inner);
@@ -386,13 +424,17 @@ function syncCardState() {
   const playable = state.phase === 'playing';
   cardGrid.querySelectorAll('.memory-card').forEach((button) => {
     const index = Number(button.dataset.index);
+    const card = state.deck[index];
+    const isQccRechargeCard = card?.pairType === 'qccRecharge';
     const matched = button.classList.contains('is-matched');
     button.classList.toggle('is-flipped', previewing && !matched);
     button.disabled = !playable || matched;
     if (matched) {
-      button.setAttribute('aria-label', '已配對的顏色卡');
+      button.setAttribute('aria-label', isQccRechargeCard ? '已配對的 QCC 補充卡' : '已配對的顏色卡');
     } else if (previewing) {
-      button.setAttribute('aria-label', `第 ${index + 1} 張，顏色預覽中`);
+      button.setAttribute('aria-label', isQccRechargeCard
+        ? `第 ${index + 1} 張，QCC 補充瓶預覽中`
+        : `第 ${index + 1} 張，顏色預覽中`);
     } else {
       button.setAttribute('aria-label', `第 ${index + 1} 張，蓋住的顏色卡`);
     }
@@ -404,24 +446,36 @@ function flipCard(button, index) {
   if (button.classList.contains('is-flipped') || button.classList.contains('is-matched')) return;
 
   button.classList.add('is-flipped');
-  button.setAttribute('aria-label', `第 ${index + 1} 張，已翻開`);
-  state.flipped.push({ button, card: state.deck[index] });
+  const card = state.deck[index];
+  button.setAttribute('aria-label', card.pairType === 'qccRecharge'
+    ? `第 ${index + 1} 張，QCC 補充瓶已翻開`
+    : `第 ${index + 1} 張，已翻開`);
+  state.flipped.push({ button, card });
   if (state.flipped.length === 2) resolveTurn();
 }
 
 function resolveTurn() {
   const [first, second] = state.flipped;
-  if (first.card.pairId === second.card.pairId) {
+  if (first.card.pairId === second.card.pairId && first.card.pairType === second.card.pairType) {
+    const isQccRechargeMatch = first.card.pairType === 'qccRecharge'
+      && second.card.pairType === 'qccRecharge'
+      && state.qccRechargeState === 'boardActive'
+      && state.currentBoardHasQccPair
+      && first.card.pairId === state.currentBoardQccPairId
+      && second.card.pairId === state.currentBoardQccPairId
+      && !state.qccPairMatched;
     first.button.classList.add('is-matched');
     second.button.classList.add('is-matched');
-    first.button.setAttribute('aria-label', '已配對的顏色卡');
-    second.button.setAttribute('aria-label', '已配對的顏色卡');
+    const matchedCardLabel = isQccRechargeMatch ? '已配對的 QCC 補充卡' : '已配對的顏色卡';
+    first.button.setAttribute('aria-label', matchedCardLabel);
+    second.button.setAttribute('aria-label', matchedCardLabel);
     first.button.disabled = true;
     second.button.disabled = true;
     state.flipped = [];
     state.matchedPairs += 1;
     state.matchedPairCount += 1;
     onSuccessfulMatch();
+    if (isQccRechargeMatch) rewardQccRechargePair(first.card.pairId);
     updateMatchUI();
 
     if (state.matchedPairs === CONFIG.CARD_PAIRS) completeDeck();
@@ -466,6 +520,16 @@ function onSuccessfulMatch() {
     ? `COMBO ${state.combo}！怪物持續減速！`
     : '配對成功！連續配對可持續拖慢怪物。';
   showFeedback(message, state.combo >= 3 ? 'big' : 'good');
+}
+
+function rewardQccRechargePair(pairId) {
+  if (!state.currentBoardHasQccPair
+    || state.qccRechargeState !== 'boardActive'
+    || state.currentBoardQccPairId !== pairId
+    || state.qccPairMatched) return;
+  state.qccPairMatched = true;
+  state.qccCount = Math.min(CONFIG.QCC_MAX_COUNT, state.qccCount + 1);
+  updateQccUI();
 }
 
 function updateComboUI(pop) {
@@ -611,21 +675,50 @@ function updateMonsterGrowthProgress() {
   }
 }
 
-function processQccRechargeNodes() {
-  const reachedRechargeCount = Math.floor(state.activeGameplayTime / CONFIG.QCC_RECHARGE_INTERVAL);
-  while (state.lastProcessedQccRechargeCount < reachedRechargeCount) {
-    // Advance the fixed time node even when full, so spending later waits for the next node.
-    state.lastProcessedQccRechargeCount += 1;
-    if (state.qccCount >= CONFIG.QCC_MAX_COUNT) continue;
-    state.qccCount += 1;
-    updateQccUI();
+function updateQccRechargeTimer(dt) {
+  if (dt <= 0) return;
+  if (state.qccRechargeState === 'locked') {
+    if (!isQccDeckUnlocked()) return;
+    startQccRechargeCycle('unlocked');
+  }
+  if (state.qccRechargeState !== 'counting') return;
+
+  state.qccRechargeElapsed += dt;
+  const reachedMilestone = Math.floor(state.qccRechargeElapsed / 10);
+  if (reachedMilestone > state.qccRechargeLastLoggedMilestone) {
+    state.qccRechargeLastLoggedMilestone = reachedMilestone;
+    logQccRecharge(`elapsed: ${reachedMilestone * 10}s`);
+  }
+  if (state.qccRechargeElapsed >= CONFIG.QCC_BOARD_RECHARGE_INTERVAL) {
+    state.qccRechargeElapsed = CONFIG.QCC_BOARD_RECHARGE_INTERVAL;
+    state.qccRechargeState = 'pending';
+    logQccRecharge(`${CONFIG.QCC_BOARD_RECHARGE_INTERVAL}s reached → pending`);
+  }
+}
+
+function logQccRecharge(message) {
+  if (CONFIG.QCC_RECHARGE_DEBUG && typeof console !== 'undefined') {
+    console.info(`[QCC Recharge] ${message}`);
+  }
+}
+
+function startQccRechargeCycle(reason) {
+  state.qccRechargeElapsed = 0;
+  state.qccRechargeLastLoggedMilestone = 0;
+  state.qccRechargeState = isQccDeckUnlocked() ? 'counting' : 'locked';
+  state.currentBoardHasQccPair = false;
+  state.currentBoardQccPairId = null;
+  state.qccPairMatched = false;
+  state.qccRechargeRefreshPending = false;
+  if (state.qccRechargeState === 'counting') {
+    logQccRecharge(`${reason} → counting`);
   }
 }
 
 function updateActiveGameplayTime(dt) {
   if (state.phase !== 'playing' || dt <= 0) return;
   state.activeGameplayTime += dt;
-  processQccRechargeNodes();
+  updateQccRechargeTimer(dt);
 }
 
 function monsterSpeed() {
@@ -682,6 +775,10 @@ function updateDistance(dt) {
 
 function completeDeck() {
   if (state.phase !== 'playing') return;
+  // A recharge cycle ends only when the whole reward board has been cleared.
+  if (state.qccRechargeState === 'boardActive' && state.currentBoardHasQccPair) {
+    startQccRechargeCycle('board resolved');
+  }
   const shouldPlayDangerTransition = state.deckIndex + 1 === CONFIG.DANGER_TRANSITION_TRIGGER_DECK
     && !state.hasShownDangerTransition;
   state.phase = shouldPlayDangerTransition ? 'boardClearStun' : 'roundClear';
@@ -826,6 +923,11 @@ function finishPreview(token) {
   state.previewTimer = null;
   state.phase = 'playing';
   gameShell.classList.remove('is-previewing');
+  // Explicitly start the first recharge cycle as soon as the unlocked deck becomes playable.
+  // Time still advances only from active playing deltaTime, never during this preview/tutorial transition.
+  if (state.qccRechargeState === 'locked' && isQccDeckUnlocked()) {
+    startQccRechargeCycle('unlocked');
+  }
   if (state.monsterStunPending) {
     state.monsterStunPending = false;
     state.monsterStunRemaining = CONFIG.MONSTER_STUN_DURATION;
@@ -849,6 +951,11 @@ function useQcc() {
     && state.currentPaletteTheme !== null
     && state.currentSelectedColorIndices.length === CONFIG.CARD_PAIRS;
   if (!qccReady || (!fromTutorial && !canUseQcc())) return;
+
+  // Only a currently active recharge board restarts its cycle after refresh.
+  // Ordinary QCC refreshes keep both counting progress and pending state intact.
+  state.qccRechargeRefreshPending = state.qccRechargeState === 'boardActive'
+    && state.currentBoardHasQccPair;
 
   applyQccSpeedReduction();
   state.distance = Math.max(state.distance, 132);
@@ -894,10 +1001,12 @@ function finishQccTransition(token) {
   state.qccTransitionTimer = null;
   const theme = state.currentPaletteTheme;
   const selectedColorIndices = [...state.currentSelectedColorIndices];
+  const resolvedRechargeBoard = state.qccRechargeRefreshPending;
   gameShell.classList.remove('is-qcc-transitioning');
   state.matchedPairs = 0;
   state.flipped = [];
-  createDeck({ theme, variant: 'clear', selectedColorIndices });
+  createDeck({ theme, variant: 'clear', selectedColorIndices, skipQccRechargeBoard: true });
+  if (resolvedRechargeBoard) startQccRechargeCycle('board resolved');
   startPreview(true);
 }
 
@@ -1500,7 +1609,13 @@ function restartGame() {
     deckIndex: 0,
     elapsed: 0,
     activeGameplayTime: 0,
-    lastProcessedQccRechargeCount: 0,
+    qccRechargeElapsed: 0,
+    qccRechargeLastLoggedMilestone: 0,
+    qccRechargeState: 'locked',
+    currentBoardHasQccPair: false,
+    currentBoardQccPairId: null,
+    qccPairMatched: false,
+    qccRechargeRefreshPending: false,
     monsterGrowthStepsProcessed: 0,
     monsterGrowthTotal: 0,
     distance: Math.min(CONFIG.INITIAL_DISTANCE, CONFIG.MAX_DISTANCE),

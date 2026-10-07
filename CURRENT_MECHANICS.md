@@ -1,6 +1,7 @@
 # 我被色記了 / Hue set me up! — 目前機制確認
 
-掃描日期：2026-09-30  
+掃描日期：2026-10-07
+
 用途：提供給 ChatGPT 作為目前專案狀態的參考，避免沿用過期的數值或要求 Codex 重做已存在的機制。
 
 ## 給 ChatGPT 的工作規則
@@ -11,7 +12,7 @@
 2. 將現有玩法視為已存在；除非使用者明確要求，勿重做、移除或改名既有機制。
 3. 使用者會手動調整平衡數值。後續修改要保留目前 `CONFIG` 數值，不可擅自「校正」或恢復成舊值。
 4. 新 prompt 若與此文件或目前程式碼衝突，先以使用者最新要求為準；需要確認現況時重新讀取 `game.js`，尤其是 `CONFIG`。
-5. 本次掃描只建立本文件，沒有修改 HTML、CSS 或 JavaScript。
+5. 本次重新掃描並實作 QCC 補充盤面、QCC 圖示與 EYE++ 疊層調整；本文同步更新對應設定和流程。
 
 ## 專案與執行方式
 
@@ -48,22 +49,24 @@
 | `PALETTE_VARIANT` | `subtle` | 正常正式色盤版本 |
 | `QCC_INITIAL_COUNT` / `QCC_MAX_COUNT` | 1 / 2 | QCC 初始數量與上限 |
 | `QCC_UNLOCK_DECK` | 4 | 第 4 副牌開始解鎖 QCC |
-| `QCC_RECHARGE_INTERVAL` | 100 秒 | 每個固定遊戲時間節點補 1 個 QCC |
+| `QCC_BOARD_RECHARGE_INTERVAL` | 50 秒 | 解鎖後累積時間，讓下一副正常新牌成為 QCC 補充盤面 |
+| `QCC_RECHARGE_CARD_IMAGE` | `assets/card/qcc-bottle.png` | QCC 補充配對的正面圖片 |
+| `QCC_RECHARGE_DEBUG` | `true` | 輸出 QCC 週期狀態變化與每 10 秒一次的計時診斷 |
 | `QCC_TRANSITION_DURATION_MS` | 500 ms | QCC 換牌過場 |
 | `QCC_TUTORIAL_DISTANCE` | 70 m | QCC 強制指引距離條件，判斷為嚴格小於 70 |
 | `QCC_TUTORIAL_OVERLAY_OPACITY` | 0.6 | QCC 指引遮罩透明度 |
 | `DANGER_TRANSITION_TRIGGER_DECK` | 3 | 第 3 副牌清盤後觸發一次警告過場 |
 | Danger 進場／停留／離場 | 0.55 / 1.9 / 0.55 秒 | 警告帶動畫時間 |
-| `VISUAL_COLLISION_OFFSET_RATIO` | 0.7 | 怪物接觸主角插畫的視覺補償比例 |
+| `VISUAL_COLLISION_OFFSET_RATIO` | 0.866 | 怪物接觸主角插畫的視覺補償比例 |
 
-**注意：** `game.js` 中 `MONSTER_GROWTH_SCALE_INTERVAL` 上方的註解仍寫「Every 100 seconds」，但本次掃描到的實際設定是 **10 秒**。以 CONFIG 數值及函式計算為準，不要把這個註解當成目前設定。README 也不列出這個手動調整後的 10 秒與 0.02 數值。
+`MONSTER_GROWTH_SCALE_INTERVAL` 的設定與程式註解目前一致；怪物增幅升級使用 `activeGameplayTime`，QCC 補充另用 `qccRechargeElapsed`。
 
 ## 速度與計時機制
 
 ### 兩份時間，不要混為一談
 
 - `state.elapsed` 是存活時間，也用來計算已經走過幾個怪物基礎速度成長節點。主遊戲迴圈在 `playing` 和特殊的 `boardClearStun` phase 累加它。
-- `state.activeGameplayTime` 只在 `phase === 'playing'` 時累加。QCC 固定補充節點和 `Y` 增幅升級都依賴它。
+- `state.activeGameplayTime` 只在 `phase === 'playing'` 時累加，用於 `Y` 增幅升級；QCC 補充另用 `qccRechargeElapsed`。
 - 因此，預覽、`roundClear`、`dangerTransition`、`qccTutorial`、`qccTransition`、`idle`、`gameOver` 不累加 `activeGameplayTime`。特殊 `boardClearStun` 也不累加它。
 - 一般清盤後的 0.5 秒暈眩是在 `phase === 'playing'` 中生效，所以這段時間仍算進 `elapsed` 和 `activeGameplayTime`；怪物速度為 0，但主角和距離仍按追逐迴圈更新。這和特殊 `boardClearStun` phase 不同。
 - 遊戲用 `requestAnimationFrame` 主迴圈推進時間，單次 delta 最多 0.05 秒；phase 切換後第一個 frame 不套用切換期間的時間差。沒有用 `setInterval` 計算補充或成長。
@@ -104,8 +107,11 @@ currentMonsterGrowthY
 ## QCC
 
 - 開局 1 個，最多 2 個；牌組未到第 4 副時鎖定。前 3 副是暖身色，QCC 需要正式色盤，因此實際可用條件也要求目前牌組具有 palette 與 6 個已選色位。
-- **沒有牌組獎勵補充。** 舊的 4n+1 牌組補充邏輯已不存在。
-- `activeGameplayTime` 每到 100、200、300 秒等固定節點就處理一次補充。若 QCC 未滿則加 1；若已滿則不加，但仍標記該節點已處理。之後使用 QCC 不會追回剛略過的節點，而是等下一個固定節點。
+- QCC 解鎖前 recharge state 為 `locked`。第 4 副牌預覽結束、進入可玩階段時呼叫 `startQccRechargeCycle('unlocked')` 明確開始第一次週期，不必先使用 QCC；只有 `playing` 的 deltaTime 累加 `qccRechargeElapsed`，所以 preview、QCC tutorial、QCC transition、round clear 與 Danger transition 都不計時。
+- 累積滿 `QCC_BOARD_RECHARGE_INTERVAL`（50 秒）後，state 轉為 `pending`，不改動目前牌面，也不直接增加庫存。下一次正常建立新牌時，從當副牌 6 組隨機挑 1 組，保留原始 `color`，並將該組兩張的 `pairType` 標為 `qccRecharge`、疊加 `QCC_RECHARGE_CARD_IMAGE`；牌組仍為 6 對、12 張，palette 與其他 5 組顏色維持原本選擇。預覽可看到顏色底與 QCC 瓶圖，蓋牌仍使用一般卡背。
+- QCC 補充盤面進入 `boardActive` 後暫停 recharge 計時。只有該盤完整清空，或該盤被 QCC 刷新並建立新盤後，才把 elapsed 歸零並回到 `counting`。尚未配到的 QCC pair 隨刷新作廢，不補庫存；已成功配對取得的 QCC 不追回。
+- 真正的 QCC pair 仍走一般 Match、Combo、配對慢速與清盤流程；成功時額外即時增加 1 個 QCC，並以 `QCC_MAX_COUNT` 為上限。已滿仍可配對消除但不超過上限。
+- 普通盤面使用 QCC 時仍保留 theme、color indices 並換成對應 `clear` 顏色；若 recharge 正在 `counting` 或 `pending`，普通刷新不重置 elapsed/state，也不會把 pending 提前放進被刷新牌組。
 - 遊戲速度高於 100 時，QCC 將「高於 100 的部分」減半並把差額累積成 `qccPermanentSlowTotal`；速度不高於 100 時不增加此減速。
 - 每次使用會把距離設為 `max(目前距離, 132)`；低於 132 m 時拉回 132 m，高於 132 m 時保留原距離。
 - 使用後放棄當前牌面進度，`matchedPairs` 歸零，`deckIndex` 不前進，也不觸發清盤暈眩；Combo、全局配對計數與既有永久減速保留。
@@ -134,7 +140,7 @@ currentMonsterGrowthY
 
 ## 掃描來源
 
-- 遊戲邏輯與數值：`game.js`（`CONFIG`、`state`、`currentMonsterGrowthY()`、`updateMonsterGrowthProgress()`、`processQccRechargeNodes()`、`updateDistance()`、牌組／QCC phase handlers）。
+- 遊戲邏輯與數值：`game.js`（`CONFIG`、`state`、`currentMonsterGrowthY()`、`updateMonsterGrowthProgress()`、`updateQccRechargeTimer()`、`updateDistance()`、牌組／QCC phase handlers）。
 - 可見資訊和 DOM：`index.html`。
 - 版面與 phase 樣式：`style.css`。
 - 使用說明：`README.md`。README 和註解可能落後於手動平衡數值；數值以當下 `game.js` 的 CONFIG 為準。
